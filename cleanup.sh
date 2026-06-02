@@ -85,20 +85,16 @@ cleanup_kong() {
   fi
 
   if $CLEAN_ALL; then
-    # Remove baseline config too
+    # Remove baseline config too (scoped by tag)
     info "Removing baseline config (LLM route + OTel)..."
-    read -rp "  This will remove ALL Kong config on this CP. Continue? (y/N): " confirm
-    if [[ "$confirm" =~ ^[Yy] ]]; then
-      if deck gateway reset \
-        --konnect-token "$TOKEN" \
-        --konnect-control-plane-name "$CP_NAME" \
-        --force 2>/dev/null; then
-        success "All Kong config removed"
-      else
-        warn "Failed to reset full Kong config"
-      fi
+    if deck gateway reset \
+      --konnect-token "$TOKEN" \
+      --konnect-control-plane-name "$CP_NAME" \
+      --select-tag ap2-baseline \
+      --force 2>/dev/null; then
+      success "Baseline entities removed"
     else
-      info "Skipped full Kong reset"
+      warn "Failed to remove baseline entities (may already be clean)"
     fi
   fi
 }

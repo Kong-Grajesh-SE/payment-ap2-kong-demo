@@ -111,19 +111,22 @@ docker compose up -d
 ### 4. Sync Kong configuration
 
 ```bash
-# Baseline (LLM route + OTel)
+# Baseline (LLM route + OTel) — scoped by tag, won't touch agent mesh
 deck gateway sync \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+  --select-tag ap2-baseline \
   config/baseline.yml
 
-# Agent mesh (additive — won't touch existing config)
+# Agent mesh (additive — won't touch baseline config)
 deck gateway sync \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
   --select-tag ap2-agents \
   config/kong.deck.clean.yml
 ```
+
+> **Or use the automated setup:** `./setup.sh` handles all of the above.
 
 ### 5. Run the demo app
 
@@ -156,8 +159,8 @@ curl -s -X POST http://localhost:8000/agents/search \
 
 ```
 config/
-  baseline.yml           # LLM route + OpenTelemetry (Phase 0)
-  kong.deck.clean.yml    # Agent routes + ai-a2a-proxy (Phase 1, additive)
+  baseline.yml           # LLM route + OpenTelemetry (Phase 0, tagged: ap2-baseline)
+  kong.deck.clean.yml    # Agent routes + ai-a2a-proxy (Phase 1, tagged: ap2-agents)
   otel-collector.yml     # OTel Collector → Jaeger config
 
 services/
@@ -175,6 +178,8 @@ demo/
   client/                # React UI (Tailwind CSS)
 
 docker-compose.yml       # All services + OTel + Jaeger
+setup.sh                 # Automated setup script
+cleanup.sh               # Automated cleanup script
 ```
 
 ## Key Design Decisions
@@ -191,12 +196,24 @@ In this branch, each agent registers its own DID and writes its own audit record
 ## Cleanup
 
 ```bash
-# Remove only AP2 entities (leave LLM + OTel)
-deck gateway sync \
+# Automated cleanup
+./cleanup.sh              # Remove agent mesh + stop Docker
+./cleanup.sh --all        # Full teardown (agents + baseline + volumes + node_modules)
+```
+
+Or manually:
+```bash
+# Remove agent mesh entities
+deck gateway reset \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
-  --select-tag ap2-agents \
-  /dev/stdin <<< '_format_version: "3.0"'
+  --select-tag ap2-agents --force
+
+# Remove baseline entities
+deck gateway reset \
+  --konnect-token "$KONNECT_API_TOKEN" \
+  --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+  --select-tag ap2-baseline --force
 
 # Stop services
 docker compose down
@@ -207,7 +224,7 @@ docker compose down
 | Branch | What | DP Change Required? |
 |--------|------|---------------------|
 | `main` | Phase 1 — Agent routes + ai-a2a-proxy (bundled). Agents self-manage DID and audit. | **No** |
-| `phase-2-custom-plugins` | Phase 2 — Custom Go plugins (kong-did-interceptor, kong-did-verifier, kong-worm-logger). Kong enforces zero-trust. | **Yes** (custom DP image) |
+| `phase-2-custom-plugins` | Phase 2 — Custom Go plugins (kong-did-interceptor, kong-did-verifier, kong-worm-logger). Kong enforces zero-trust. | **Yes** (volume mount Go binaries) |
 
 ## Related Documentation
 

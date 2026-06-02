@@ -64,6 +64,7 @@ export KONNECT_CONTROL_PLANE_NAME="PE-Bootcamp"
 deck gateway sync \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+  --select-tag ap2-baseline \
   config/baseline.yml
 ```
 
@@ -141,6 +142,9 @@ Summary:
 
 > `--select-tag ap2-agents` means decK only manages entities with that tag.
 > Your existing LLM route, OTel plugin, and any other config remains untouched.
+> Similarly, baseline uses `--select-tag ap2-baseline` so both syncs are independent.
+
+> **Automated alternative:** `./setup.sh` handles Phases 0–2 automatically.
 
 ### 1.3 Verify — End-to-End AP2 Flow Through Kong
 
@@ -312,17 +316,26 @@ open http://localhost:16686
 
 ### Remove only AP2 entities (leave LLM + OTel intact):
 ```bash
-deck gateway sync \
+deck gateway reset \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
-  --select-tag ap2-agents \
-  /dev/stdin <<< '_format_version: "3.0"'
+  --select-tag ap2-agents --force
+```
+
+### Remove baseline entities:
+```bash
+deck gateway reset \
+  --konnect-token "$KONNECT_API_TOKEN" \
+  --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+  --select-tag ap2-baseline --force
 ```
 
 ### Stop all services:
 ```bash
 docker compose down
 ```
+
+> **Automated alternative:** `./cleanup.sh` or `./cleanup.sh --all` for full teardown.
 
 ---
 

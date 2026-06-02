@@ -266,11 +266,12 @@ if [ -z "$CP_NAME" ] || [ -z "$TOKEN" ]; then
   exit 1
 fi
 
-# Phase 0: Baseline (LLM route + OTel)
+# Phase 0: Baseline (LLM route + OTel) — scoped by tag, won't touch agent mesh
 info "Syncing baseline config (LLM route + OpenTelemetry)..."
 deck gateway sync \
   --konnect-token "$TOKEN" \
   --konnect-control-plane-name "$CP_NAME" \
+  --select-tag ap2-baseline \
   config/baseline.yml
 
 success "Baseline synced"
