@@ -1,6 +1,6 @@
 # Autonomous Commerce with Kong Enterprise + AP2 Protocol
 
-A demonstration of **autonomous agent-to-agent payments** governed by Kong Gateway. Four independent AI agents negotiate, authorize, and settle payments using the **AP2 (Autonomous Payment Protocol)** — with every hop routed through Kong for observability, governance, and A2A protocol awareness.
+A demonstration of **autonomous agent-to-agent payments** governed by Kong Gateway. Four independent AI agents negotiate, authorize, and settle payments using the **AP2 (Autonomous Payment Protocol)** - with every hop routed through Kong for observability, governance, and A2A protocol awareness.
 
 ## Architecture
 
@@ -54,10 +54,10 @@ A demonstration of **autonomous agent-to-agent payments** governed by Kong Gatew
 |----------------|---------------|
 | **ai-a2a-proxy** (bundled) | Parses JSON-RPC 2.0 A2A payloads, logs agent interactions |
 | **OpenTelemetry** (bundled) | Every agent call gets distributed tracing |
-| **Konnect Debugger** | Live request inspection with `KONG_CLUSTER_RPC=on` |
+| **Konnect Debugger** | Live request inspection with `KONG_CLUSTER_RPC=on` + `KONG_CLUSTER_RPC_SYNC=on` |
 | **Konnect Analytics** | Full visibility into agent-to-agent traffic patterns |
-| **decK `--select-tag`** | Additive config — doesn't touch existing gateway setup |
-| **Route-based agent mesh** | Kong as the A2A traffic mesh — all inter-agent calls visible |
+| **decK `--select-tag`** | Additive config - doesn't touch existing gateway setup |
+| **Route-based agent mesh** | Kong as the A2A traffic mesh - all inter-agent calls visible |
 
 ## AP2 Protocol Flow
 
@@ -97,8 +97,10 @@ Add these env vars to the `docker run` command Konnect provides:
 
 ```bash
 -e "KONG_CLUSTER_RPC=on" \
+-e "KONG_CLUSTER_RPC_SYNC=on" \
 -e "KONG_TRACING_INSTRUMENTATIONS=all" \
 -e "KONG_TRACING_SAMPLING_RATE=1.0" \
+-e "KONG_TLS_CERTIFICATE_VERIFY=off" \
 -p 8000:8000 -p 8443:8443
 ```
 
@@ -111,14 +113,14 @@ docker compose up -d
 ### 4. Sync Kong configuration
 
 ```bash
-# Baseline (LLM route + OTel) — scoped by tag, won't touch agent mesh
+# Baseline (LLM route + OTel) - scoped by tag, won't touch agent mesh
 deck gateway sync \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
   --select-tag ap2-baseline \
   config/baseline.yml
 
-# Agent mesh (additive — won't touch baseline config)
+# Agent mesh (additive - won't touch baseline config)
 deck gateway sync \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
@@ -174,7 +176,7 @@ services/
   worm-storage/          # Write-Once-Read-Many audit (PostgreSQL)
 
 demo/
-  server/                # BFF (Node.js/Express) — orchestrates AP2 via Kong
+  server/                # BFF (Node.js/Express) - orchestrates AP2 via Kong
   client/                # React UI (Tailwind CSS)
 
 docker-compose.yml       # All services + OTel + Jaeger
@@ -185,7 +187,7 @@ cleanup.sh               # Automated cleanup script
 ## Key Design Decisions
 
 ### Why `--select-tag ap2-agents`?
-decK's `--select-tag` makes sync **additive**. It only manages entities with that tag — your existing services, routes, and plugins remain untouched. This is how you safely add AP2 to a production gateway.
+decK's `--select-tag` makes sync **additive**. It only manages entities with that tag - your existing services, routes, and plugins remain untouched. This is how you safely add AP2 to a production gateway.
 
 ### Why `ai-a2a-proxy`?
 This bundled plugin understands A2A/JSON-RPC 2.0 semantics. It logs agent interaction statistics and payloads, giving Kong protocol-level awareness of the agent mesh.
@@ -223,12 +225,11 @@ docker compose down
 
 | Branch | What | DP Change Required? |
 |--------|------|---------------------|
-| `main` | Phase 1 — Agent routes + ai-a2a-proxy (bundled). Agents self-manage DID and audit. | **No** |
-| `phase-2-custom-plugins` | Phase 2 — Custom Go plugins (kong-did-interceptor, kong-did-verifier, kong-worm-logger). Kong enforces zero-trust. | **Yes** (volume mount Go binaries) |
+| `main` | Phase 1 - Agent routes + ai-a2a-proxy (bundled). Agents self-manage DID and audit. | **No** |
+| `phase-2-custom-plugins` | Phase 2 - Custom Go plugins (kong-did-interceptor, kong-did-verifier, kong-worm-logger). Kong enforces zero-trust. | **Yes** (volume mount Go binaries) |
 
 ## Related Documentation
 
-- [SETUP.md](./SETUP.md) — Detailed step-by-step setup guide with sample responses
+- [SETUP.md](./SETUP.md) - Detailed step-by-step setup guide with sample responses
 - [ai-a2a-proxy plugin](https://docs.konghq.com/hub/kong-inc/ai-a2a-proxy/)
-- [Custom plugins in Konnect hybrid mode](https://developer.konghq.com/custom-plugins/konnect-hybrid-mode/)
 - [decK CLI](https://docs.konghq.com/deck/latest/)

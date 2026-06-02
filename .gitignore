@@ -9,6 +9,7 @@ certs/
 *.dylib
 *.test
 *.out
+go.sum
 
 # Node.js
 node_modules/
@@ -26,4 +27,3 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
-.env

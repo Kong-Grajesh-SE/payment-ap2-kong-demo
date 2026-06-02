@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════
-# AP2 Payment Demo — Automated Setup (Phase 1)
+# AP2 Payment Demo - Automated Setup (Phase 1)
 # ═══════════════════════════════════════════════════════════════════
 #
 # Usage:
-#   ./setup.sh              # Interactive — prompts for missing values
+#   ./setup.sh              # Interactive - prompts for missing values
 #   ./setup.sh --check      # Check prerequisites only
 #   ./setup.sh --skip-env   # Skip .env setup (already configured)
 #
@@ -25,7 +25,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -95,7 +95,7 @@ check_cmd jq       || MISSING=$((MISSING + 1))
 if docker info &>/dev/null; then
   success "Docker daemon is running"
 else
-  fail "Docker daemon is not running — start Docker Desktop"
+  fail "Docker daemon is not running - start Docker Desktop"
   MISSING=$((MISSING + 1))
 fi
 
@@ -105,7 +105,7 @@ if command -v node &>/dev/null; then
   if [ "$NODE_VERSION" -ge 20 ]; then
     success "Node.js version $(node -v) (≥ 20 required)"
   else
-    warn "Node.js $(node -v) — version 20+ recommended"
+    warn "Node.js $(node -v) - version 20+ recommended"
   fi
 fi
 
@@ -138,7 +138,7 @@ header "Step 2: Environment Configuration"
 
 if $SKIP_ENV; then
   if [ -f .env ]; then
-    success ".env exists — skipping (--skip-env)"
+    success ".env exists - skipping (--skip-env)"
   else
     fail ".env not found. Run without --skip-env to create it."
     exit 1
@@ -168,6 +168,7 @@ prompt_if_empty() {
   if [ -z "$current_val" ] || [[ "$current_val" == "<"* ]]; then
     read -rp "  $prompt_msg: " new_val
     if [ -n "$new_val" ]; then
+      # Update .env file
       if grep -q "^${var_name}=" .env 2>/dev/null; then
         sed -i '' "s|^${var_name}=.*|${var_name}=${new_val}|" .env
       else
@@ -206,6 +207,7 @@ docker compose up -d --build
 echo ""
 info "Waiting for services to be healthy..."
 
+# Wait for each service
 SERVICES=("did-registry:8070" "worm-storage:8090" "search-agent:9001" "cart-intent-agent:9002" "cart-mandate-agent:9003" "payment-agent:9004")
 
 ALL_HEALTHY=true
@@ -240,8 +242,10 @@ else
   echo "  1. Go to Konnect → Gateway Manager → Data Plane Nodes → New Data Plane Node"
   echo "  2. Use the Docker command Konnect provides, adding:"
   echo "     -e KONG_CLUSTER_RPC=on"
+  echo "     -e KONG_CLUSTER_RPC_SYNC=on"
   echo "     -e KONG_TRACING_INSTRUMENTATIONS=all"
   echo "     -e KONG_TRACING_SAMPLING_RATE=1.0"
+  echo "     -e KONG_TLS_CERTIFICATE_VERIFY=off"
   echo "     -p 8000:8000 -p 8443:8443"
   echo ""
   read -rp "  Press Enter once your Kong DP is running (or Ctrl+C to exit)..."
@@ -266,7 +270,7 @@ if [ -z "$CP_NAME" ] || [ -z "$TOKEN" ]; then
   exit 1
 fi
 
-# Phase 0: Baseline (LLM route + OTel) — scoped by tag, won't touch agent mesh
+# Phase 0: Baseline (LLM route + OTel) - scoped by tag, won't touch agent mesh
 info "Syncing baseline config (LLM route + OpenTelemetry)..."
 deck gateway sync \
   --konnect-token "$TOKEN" \
@@ -295,11 +299,12 @@ AGENTS=("search" "cart-intent" "cart-mandate" "payment")
 ALL_OK=true
 
 for agent_name in "${AGENTS[@]}"; do
+  # ai-a2a-proxy returns 400 for unknown JSON-RPC methods - that still proves reachability
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KONG_URL/agents/$agent_name" \
     -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","method":"health/check","params":{},"id":"setup-verify"}' 2>/dev/null || echo "000")
+    -d '{"jsonrpc":"2.0","method":"tasks/resolve","params":{},"id":"setup-verify"}' 2>/dev/null || echo "000")
 
-  if [ "$HTTP_CODE" = "200" ]; then
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "400" ]; then
     success "$agent_name agent reachable via Kong ($KONG_URL/agents/$agent_name)"
   else
     fail "$agent_name agent returned HTTP $HTTP_CODE via Kong"
@@ -344,9 +349,3 @@ echo "  Observability:"
 echo "    Jaeger UI:        http://localhost:16686"
 echo "    Konnect Debugger: https://cloud.konghq.com (Gateway Manager → Debugger)"
 echo ""
-# ai-a2a-proxy returns 400 for unknown JSON-RPC methods — that still proves reachability
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KONG_URL/agents/$agent_name" \
-    -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","method":"tasks/resolve","params":{},"id":"setup-verify"}' 2>/dev/null || echo "000")
-
-  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "4

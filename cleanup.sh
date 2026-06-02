@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════
-# AP2 Payment Demo — Cleanup (Phase 1)
+# AP2 Payment Demo - Cleanup
 # ═══════════════════════════════════════════════════════════════════
 #
 # Usage:
 #   ./cleanup.sh              # Stop services + remove Kong agent routes
-#   ./cleanup.sh --all        # Full teardown (volumes, node_modules, .env)
+#   ./cleanup.sh --all        # Full teardown (volumes, node_modules, .env, binaries)
 #   ./cleanup.sh --kong-only  # Remove Kong config only (keep Docker services)
 #   ./cleanup.sh --docker-only  # Stop Docker only (keep Kong config)
 #
@@ -35,7 +35,7 @@ for arg in "$@"; do
     --docker-only)  DOCKER_ONLY=true ;;
     --help|-h)
       echo "Usage: ./cleanup.sh [--all] [--kong-only] [--docker-only]"
-      echo "  --all          Full teardown: Docker + volumes + Kong + node_modules + .env"
+      echo "  --all          Full teardown: Docker + volumes + Kong + node_modules + .env + binaries"
       echo "  --kong-only    Remove Kong config only (keep Docker services running)"
       echo "  --docker-only  Stop Docker services only (keep Kong config)"
       exit 0
@@ -66,7 +66,7 @@ cleanup_kong() {
   CP_NAME="${KONNECT_CONTROL_PLANE_NAME:-}"
 
   if [ -z "$TOKEN" ] || [ -z "$CP_NAME" ]; then
-    warn "KONNECT_API_TOKEN or KONNECT_CONTROL_PLANE_NAME not set — skipping Kong cleanup"
+    warn "KONNECT_API_TOKEN or KONNECT_CONTROL_PLANE_NAME not set - skipping Kong cleanup"
     echo "  To clean Kong manually:"
     echo "    deck gateway reset --konnect-token <token> --konnect-control-plane-name <name> --select-tag ap2-agents --force"
     return
@@ -106,7 +106,7 @@ cleanup_docker() {
   header "Stopping Docker Services"
 
   if ! docker info &>/dev/null; then
-    warn "Docker daemon not running — skipping"
+    warn "Docker daemon not running - skipping"
     return
   fi
 

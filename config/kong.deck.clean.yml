@@ -3,8 +3,8 @@
 #
 # Prerequisites (customer already has):
 #   - Kong Gateway (any 3.x) with Konnect or self-managed
-#   - OpenTelemetry plugin (bundled) — already configured
-#   - LLM route (e.g., Mistral at /llm) — already configured
+#   - OpenTelemetry plugin (bundled) - already configured
+#   - LLM route (e.g., Mistral at /llm) - already configured
 #
 # What this adds:
 #   - 4 agent services + routes (A2A JSON-RPC endpoints)
@@ -15,7 +15,7 @@
 #     --konnect-token $TOKEN --konnect-control-plane-name $CP \
 #     config/kong.deck.clean.yml
 #
-# This is ADDITIVE — existing services, routes, and plugins are untouched.
+# This is ADDITIVE - existing services, routes, and plugins are untouched.
 # ─────────────────────────────────────────────────────────────────────
 _format_version: "3.0"
 

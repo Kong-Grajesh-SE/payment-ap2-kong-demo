@@ -1,4 +1,4 @@
-# Setup Guide — AP2 Payment Demo
+# Setup Guide - AP2 Payment Demo
 
 Step-by-step instructions to deploy the AP2 autonomous payment demo on top of an existing Kong Gateway.
 
@@ -11,7 +11,7 @@ Step-by-step instructions to deploy the AP2 autonomous payment demo on top of an
 | Docker Desktop | 4.x+ | Run Kong DP + agent services |
 | decK CLI | 1.38+ | Declarative config management |
 | Konnect account | Enterprise | Control plane + Debugger |
-| Mistral API key | — | LLM for intent extraction |
+| Mistral API key | - | LLM for intent extraction |
 | Node.js | 20+ | Demo app (BFF + client) |
 
 ```bash
@@ -22,7 +22,7 @@ deck version
 
 ---
 
-## Phase 0: Baseline — Kong Gateway with LLM + OTel
+## Phase 0: Baseline - Kong Gateway with LLM + OTel
 
 > Skip this if you already have Kong running with an LLM route and OpenTelemetry.
 
@@ -42,8 +42,10 @@ Konnect provides a `docker run` command. Add these env vars:
 docker run -d --name kong-dp \
   # ... (all Konnect-provided flags) ...
   -e "KONG_CLUSTER_RPC=on" \
+  -e "KONG_CLUSTER_RPC_SYNC=on" \
   -e "KONG_TRACING_INSTRUMENTATIONS=all" \
   -e "KONG_TRACING_SAMPLING_RATE=1.0" \
+  -e "KONG_TLS_CERTIFICATE_VERIFY=off" \
   -p 8000:8000 \
   -p 8443:8443 \
   kong/kong-gateway:3.14
@@ -52,8 +54,10 @@ docker run -d --name kong-dp \
 | Env Var | Purpose |
 |---------|---------|
 | `KONG_CLUSTER_RPC=on` | Enables Konnect Debugger (bidirectional RPC) |
+| `KONG_CLUSTER_RPC_SYNC=on` | Enables config sync over RPC channel |
 | `KONG_TRACING_INSTRUMENTATIONS=all` | Full OTel tracing across all phases |
 | `KONG_TRACING_SAMPLING_RATE=1.0` | 100% sampling (demo only) |
+| `KONG_TLS_CERTIFICATE_VERIFY=off` | Skip TLS cert verification (demo only) |
 
 ### 0.3 Sync baseline config (LLM route + OTel)
 
@@ -146,9 +150,9 @@ Summary:
 
 > **Automated alternative:** `./setup.sh` handles Phases 0–2 automatically.
 
-### 1.3 Verify — End-to-End AP2 Flow Through Kong
+### 1.3 Verify - End-to-End AP2 Flow Through Kong
 
-#### Step 1: Search Agent — Product Discovery
+#### Step 1: Search Agent - Product Discovery
 
 ```bash
 curl -s -X POST http://localhost:8000/agents/search \
@@ -190,7 +194,7 @@ curl -s -X POST http://localhost:8000/agents/search \
 }
 ```
 
-#### Step 2: Cart Intent Agent — Add to Cart
+#### Step 2: Cart Intent Agent - Add to Cart
 
 ```bash
 curl -s -X POST http://localhost:8000/agents/cart-intent \
@@ -208,7 +212,7 @@ curl -s -X POST http://localhost:8000/agents/cart-intent \
 
 **Expected:** Returns `CartMandate` with items, totalAmount, paymentMethods, and Ed25519 signature.
 
-#### Step 3: Cart Mandate Agent — Authorize Payment
+#### Step 3: Cart Mandate Agent - Authorize Payment
 
 ```bash
 curl -s -X POST http://localhost:8000/agents/cart-mandate \
@@ -227,7 +231,7 @@ curl -s -X POST http://localhost:8000/agents/cart-mandate \
 
 **Expected:** Returns `PaymentMandate` with DPAN token, authCode, status "authorized", and signature.
 
-#### Step 4: Payment Agent — Settle Payment
+#### Step 4: Payment Agent - Settle Payment
 
 ```bash
 curl -s -X POST http://localhost:8000/agents/payment \
@@ -257,16 +261,16 @@ curl -s -X POST http://localhost:8000/agents/payment \
 
 ---
 
-## Phase 2: Run the Demo Application
+## Run the Demo Application
 
-### 2.1 Configure environment
+### Configure environment
 
 ```bash
 cp .env.example .env
 # Edit .env with your values
 ```
 
-### 2.2 Start demo server + client
+### Start demo server + client
 
 ```bash
 # Terminal 1: BFF server
@@ -276,19 +280,19 @@ cd demo/server && npm install && npm run dev
 cd demo/client && npm install && npm run dev
 ```
 
-### 2.3 Use the demo
+### Use the demo
 
 Open **http://localhost:5173** and type a shopping intent (e.g., "I want to buy running shoes").
 
 | Step | User Action | What Happens (via Kong) |
 |------|-------------|------------------------|
 | 1 | Types "buy running shoes" | Mistral extracts intent → `POST /llm` |
-| 2 | — | Search Agent called → `POST /agents/search` |
+| 2 | - | Search Agent called → `POST /agents/search` |
 | 3 | Picks a product | Cart Intent Agent called → `POST /agents/cart-intent` |
 | 4 | Selects payment method | Wallet loaded (simulated locally) |
 | 5 | Confirms purchase | Cart Mandate Agent called → `POST /agents/cart-mandate` |
 | 6 | Enters OTP (`123`) | Payment Agent called → `POST /agents/payment` |
-| 7 | — | DID verified, WORM audit written, receipt generated |
+| 7 | - | DID verified, WORM audit written, receipt generated |
 
 Every hop goes through Kong → ai-a2a-proxy → OTel → visible in Konnect.
 
@@ -341,11 +345,11 @@ docker compose down
 
 ## Next Steps: Custom Plugins (Phase 2)
 
-For the **zero-trust gateway enforcement** approach — where Kong (not agents) manages DID provisioning, signature verification, and WORM audit — check out the [`phase-2-custom-plugins`](../../tree/phase-2-custom-plugins) branch.
+For the **zero-trust gateway enforcement** approach - where Kong (not agents) manages DID provisioning, signature verification, and WORM audit - check out the [`phase-2-custom-plugins`](../../tree/phase-2-custom-plugins) branch.
 
 That branch adds:
-- `kong-did-interceptor` — Kong provisions DIDs before requests reach agents
-- `kong-did-verifier` — Kong verifies DID signatures on responses
-- `kong-worm-logger` — Kong writes immutable audit records independently
+- `kong-did-interceptor` - Kong provisions DIDs before requests reach agents
+- `kong-did-verifier` - Kong verifies DID signatures on responses
+- `kong-worm-logger` - Kong writes immutable audit records independently
 
 This requires a custom DP image (Go plugin binaries baked in) and uploading Lua schemas to Konnect.

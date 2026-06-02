@@ -114,10 +114,10 @@ export default function App() {
       case "product_options": {
         const products = data.products as Array<{ id: string; name: string; price: number; currency: string; merchant: string; description: string }>;
         const content = `${data.prompt}\n\n` +
-          products.map((p, i) => `**${i + 1}.** ${p.name} — $${p.price}\n   _${p.description}_ (${p.merchant})`).join("\n\n");
+          products.map((p, i) => `**${i + 1}.** ${p.name} - $${p.price}\n   _${p.description}_ (${p.merchant})`).join("\n\n");
         setMessages((prev) => [
           ...prev,
-          { id: generateId(), role: "assistant", content, timestamp: new Date(), choices: products.map((p, i) => ({ label: `${i + 1}. ${p.name} — $${p.price}`, value: String(i + 1) })) },
+          { id: generateId(), role: "assistant", content, timestamp: new Date(), choices: products.map((p, i) => ({ label: `${i + 1}. ${p.name} - $${p.price}`, value: String(i + 1) })) },
         ]);
         break;
       }
