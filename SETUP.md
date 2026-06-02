@@ -326,13 +326,122 @@ docker compose down
 
 ---
 
-## Next Steps: Custom Plugins (Phase 2)
+---
 
-For the **zero-trust gateway enforcement** approach — where Kong (not agents) manages DID provisioning, signature verification, and WORM audit — check out the [`phase-2-custom-plugins`](../../tree/phase-2-custom-plugins) branch.
+## Phase 3: Custom Plugins — Zero-Trust Gateway Enforcement
 
-That branch adds:
-- `kong-did-interceptor` — Kong provisions DIDs before requests reach agents
-- `kong-did-verifier` — Kong verifies DID signatures on responses
-- `kong-worm-logger` — Kong writes immutable audit records independently
+> This section is specific to the `phase-2-custom-plugins` branch.
 
-This requires a custom DP image (Go plugin binaries baked in) and uploading Lua schemas to Konnect.
+### 3.1 Upload plugin schemas to Konnect
+
+Custom plugins need their schema registered in the Control Plane so Konnect can render config forms and validate decK sync.
+
+```bash
+export KONNECT_CONTROL_PLANE_ID="your-cp-id"  # From Konnect UI
+chmod +x scripts/upload-schemas.sh
+./scripts/upload-schemas.sh
+```
+
+**Expected output:**
+```
+=== Uploading Custom Plugin Schemas to Konnect ===
+Control Plane: 2e94e75e-66dc-4083-99a2-24ca016c420a
+
+📤 Uploading schema for kong-did-interceptor...
+✅ kong-did-interceptor schema uploaded successfully
+📤 Uploading schema for kong-did-verifier...
+✅ kong-did-verifier schema uploaded successfully
+📤 Uploading schema for kong-worm-logger...
+✅ kong-worm-logger schema uploaded successfully
+
+=== Done ===
+```
+
+### 3.2 Build custom DP image
+
+The custom DP image bakes Go plugin binaries into the Kong image:
+
+```bash
+docker build -f plugins/Dockerfile.kong-dp -t kong-dp-custom .
+```
+
+This multi-stage build:
+1. Compiles each Go plugin (`kong-did-interceptor`, `kong-did-verifier`, `kong-worm-logger`)
+2. Copies the binaries into the official Kong 3.14 image
+3. Configures plugin server paths
+
+### 3.3 Replace vanilla DP with custom image
+
+```bash
+# Stop existing DP
+docker stop kong-dp && docker rm kong-dp
+
+# Start custom DP (use the same Konnect flags from Phase 0)
+docker run -d --name kong-dp-custom \
+  -e "KONG_ROLE=data_plane" \
+  -e "KONG_DATABASE=off" \
+  -e "KONG_CLUSTER_CONTROL_PLANE=<your-cp>.us.cp.konghq.com:443" \
+  -e "KONG_CLUSTER_SERVER_NAME=<your-cp>.us.cp.konghq.com" \
+  -e "KONG_CLUSTER_TELEMETRY_ENDPOINT=<your-cp>.us.tp.konghq.com:443" \
+  -e "KONG_CLUSTER_TELEMETRY_SERVER_NAME=<your-cp>.us.tp.konghq.com" \
+  -e "KONG_CLUSTER_CERT=<path-to-cert>" \
+  -e "KONG_CLUSTER_CERT_KEY=<path-to-key>" \
+  -e "KONG_CLUSTER_RPC=on" \
+  -e "KONG_TRACING_INSTRUMENTATIONS=all" \
+  -e "KONG_TRACING_SAMPLING_RATE=1.0" \
+  -p 8000:8000 \
+  -p 8443:8443 \
+  kong-dp-custom
+```
+
+### 3.4 Sync full config (with custom plugins)
+
+```bash
+deck gateway sync \
+  --konnect-token "$KONNECT_API_TOKEN" \
+  --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+  --select-tag ap2-agents \
+  config/kong.deck.yml
+```
+
+**Expected output:**
+```
+updating plugin ai-a2a-proxy for service search-svc
+creating plugin kong-did-interceptor for service search-svc
+creating plugin kong-did-verifier for service search-svc
+creating plugin kong-worm-logger for service search-svc
+...
+Summary:
+  Created: 12
+  Updated: 4
+  Deleted: 0
+```
+
+### 3.5 Verify custom plugins are active
+
+```bash
+curl -s -X POST http://localhost:8000/agents/search \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"search/execute","params":{"intent":"shoes"},"id":"1"}' \
+  | python3 -m json.tool
+```
+
+In the response, look for:
+- `_meta.sender_did` — DID provisioned by `kong-did-interceptor`
+- Response passes through `kong-did-verifier` without 403
+- WORM storage has a new record: `curl -s http://localhost:8090/records | python3 -m json.tool`
+
+---
+
+## Next Steps
+
+This branch demonstrates the full zero-trust approach. Every agent call now goes through:
+
+1. **kong-did-interceptor** (Access phase) — provisions/injects DID
+2. **Agent processes request** — signs response with its DID key
+3. **kong-did-verifier** (Response phase) — verifies Ed25519 signature
+4. **kong-worm-logger** (Log phase) — writes immutable audit record
+
+Agents cannot bypass identity or audit — Kong is the single source of truth.
+
+For the simpler approach where agents self-manage DID/audit (no DP changes needed), see the [`main`](../../tree/main) branch.

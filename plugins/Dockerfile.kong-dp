@@ -1,0 +1,70 @@
+# Stage 1: Build Go plugins
+FROM golang:1.22-alpine AS builder
+
+RUN apk add --no-cache git
+
+# Build kong-did-interceptor
+WORKDIR /build/kong-did-interceptor
+COPY plugins/kong-did-interceptor/go.mod plugins/kong-did-interceptor/go.sum* ./
+RUN go mod download 2>/dev/null || true
+COPY plugins/kong-did-interceptor/ .
+RUN go mod tidy && CGO_ENABLED=0 go build -o /plugins/kong-did-interceptor .
+
+# Build kong-did-verifier
+WORKDIR /build/kong-did-verifier
+COPY plugins/kong-did-verifier/go.mod plugins/kong-did-verifier/go.sum* ./
+RUN go mod download 2>/dev/null || true
+COPY plugins/kong-did-verifier/ .
+RUN go mod tidy && CGO_ENABLED=0 go build -o /plugins/kong-did-verifier .
+
+# Build kong-worm-logger
+WORKDIR /build/kong-worm-logger
+COPY plugins/kong-worm-logger/go.mod plugins/kong-worm-logger/go.sum* ./
+RUN go mod download 2>/dev/null || true
+COPY plugins/kong-worm-logger/ .
+RUN go mod tidy && CGO_ENABLED=0 go build -o /plugins/kong-worm-logger .
+
+# Stage 2: Kong Enterprise DP with Go plugins
+FROM kong/kong-gateway:3.14
+
+USER root
+
+# Install Go plugin executables to /usr/local/bin (Kong default search path)
+COPY --from=builder /plugins/kong-did-interceptor /usr/local/bin/kong-did-interceptor
+COPY --from=builder /plugins/kong-did-verifier /usr/local/bin/kong-did-verifier
+COPY --from=builder /plugins/kong-worm-logger /usr/local/bin/kong-worm-logger
+RUN chmod +x /usr/local/bin/kong-did-interceptor \
+             /usr/local/bin/kong-did-verifier \
+             /usr/local/bin/kong-worm-logger
+
+# Copy Lua schema files for Konnect hybrid mode compatibility
+COPY plugins/kong-did-interceptor/schema.lua /usr/local/share/lua/5.1/kong/plugins/kong-did-interceptor/schema.lua
+COPY plugins/kong-did-verifier/schema.lua /usr/local/share/lua/5.1/kong/plugins/kong-did-verifier/schema.lua
+COPY plugins/kong-worm-logger/schema.lua /usr/local/share/lua/5.1/kong/plugins/kong-worm-logger/schema.lua
+
+# Configure Kong to recognize the Go plugin servers
+# See: https://developer.konghq.com/custom-plugins/go/
+ENV KONG_PLUGINSERVER_NAMES="kong-did-interceptor,kong-did-verifier,kong-worm-logger"
+
+ENV KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_SOCKET="/usr/local/kong/kong-did-interceptor.socket"
+ENV KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_START_CMD="/usr/local/bin/kong-did-interceptor"
+ENV KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_QUERY_CMD="/usr/local/bin/kong-did-interceptor -dump"
+
+ENV KONG_PLUGINSERVER_KONG_DID_VERIFIER_SOCKET="/usr/local/kong/kong-did-verifier.socket"
+ENV KONG_PLUGINSERVER_KONG_DID_VERIFIER_START_CMD="/usr/local/bin/kong-did-verifier"
+ENV KONG_PLUGINSERVER_KONG_DID_VERIFIER_QUERY_CMD="/usr/local/bin/kong-did-verifier -dump"
+
+ENV KONG_PLUGINSERVER_KONG_WORM_LOGGER_SOCKET="/usr/local/kong/kong-worm-logger.socket"
+ENV KONG_PLUGINSERVER_KONG_WORM_LOGGER_START_CMD="/usr/local/bin/kong-worm-logger"
+ENV KONG_PLUGINSERVER_KONG_WORM_LOGGER_QUERY_CMD="/usr/local/bin/kong-worm-logger -dump"
+
+# Enable custom plugins alongside bundled ones
+ENV KONG_PLUGINS="bundled,kong-did-interceptor,kong-did-verifier,kong-worm-logger"
+
+USER kong
+
+ENTRYPOINT ["/entrypoint.sh"]
+EXPOSE 8000 8443 8001 8444
+STOPSIGNAL SIGQUIT
+HEALTHCHECK --interval=10s --timeout=10s --retries=10 CMD kong health
+CMD ["kong", "docker-start"]
