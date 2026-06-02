@@ -331,10 +331,12 @@ docker compose down
 ## Phase 3: Custom Plugins — Zero-Trust Gateway Enforcement
 
 > This section is specific to the `phase-2-custom-plugins` branch.
+>
+> Reference: [Custom plugins in Konnect hybrid mode](https://developer.konghq.com/custom-plugins/konnect-hybrid-mode/) | [Installation & distribution](https://developer.konghq.com/custom-plugins/installation-and-distribution/)
 
-### 3.1 Upload plugin schemas to Konnect
+### 3.1 Upload plugin schemas to Konnect CP
 
-Custom plugins need their schema registered in the Control Plane so Konnect can render config forms and validate decK sync.
+In Konnect hybrid mode, you upload the plugin's `schema.lua` (without `require()` statements) to the Control Plane via API. Konnect uses it for config validation and the plugin catalog.
 
 ```bash
 export KONNECT_CONTROL_PLANE_ID="your-cp-id"  # From Konnect UI
@@ -344,7 +346,8 @@ chmod +x scripts/upload-schemas.sh
 
 **Expected output:**
 ```
-=== Uploading Custom Plugin Schemas to Konnect ===
+=== Uploading Custom Plugin Schemas to Konnect CP ===
+Region: us
 Control Plane: 2e94e75e-66dc-4083-99a2-24ca016c420a
 
 📤 Uploading schema for kong-did-interceptor...
@@ -354,30 +357,42 @@ Control Plane: 2e94e75e-66dc-4083-99a2-24ca016c420a
 📤 Uploading schema for kong-worm-logger...
 ✅ kong-worm-logger schema uploaded successfully
 
+=== Verifying uploads ===
+  ✓ kong-did-interceptor — verified in CP
+  ✓ kong-did-verifier — verified in CP
+  ✓ kong-worm-logger — verified in CP
+
 === Done ===
 ```
 
-### 3.2 Build custom DP image
-
-The custom DP image bakes Go plugin binaries into the Kong image:
-
+**Verify manually** (optional):
 ```bash
-docker build -f plugins/Dockerfile.kong-dp -t kong-dp-custom .
+curl -s https://us.api.konghq.com/v2/control-planes/$KONNECT_CONTROL_PLANE_ID/core-entities/plugin-schemas/kong-did-interceptor \
+  -H "Authorization: Bearer $KONNECT_API_TOKEN" | jq .name
+# "kong-did-interceptor"
 ```
 
-This multi-stage build:
-1. Compiles each Go plugin (`kong-did-interceptor`, `kong-did-verifier`, `kong-worm-logger`)
-2. Copies the binaries into the official Kong 3.14 image
-3. Configures plugin server paths
+### 3.2 Build Go plugin binaries
 
-### 3.3 Replace vanilla DP with custom image
+Compile the Go plugin servers locally. These binaries will be volume-mounted into the Kong DP container.
+
+```bash
+# Build for Linux (since Kong DP runs in a Linux container)
+cd plugins/kong-did-interceptor && GOOS=linux GOARCH=amd64 go build -o kong-did-interceptor . && cd -
+cd plugins/kong-did-verifier && GOOS=linux GOARCH=amd64 go build -o kong-did-verifier . && cd -
+cd plugins/kong-worm-logger && GOOS=linux GOARCH=amd64 go build -o kong-worm-logger . && cd -
+```
+
+### 3.3 Restart DP with plugin files mounted
+
+Per [Kong docs](https://developer.konghq.com/custom-plugins/installation-and-distribution/#via-a-dockerfile-or-docker-run-install-and-load), install plugin files on the DP node via volume mount:
 
 ```bash
 # Stop existing DP
 docker stop kong-dp && docker rm kong-dp
 
-# Start custom DP (use the same Konnect flags from Phase 0)
-docker run -d --name kong-dp-custom \
+# Start DP with Go plugin binaries volume-mounted
+docker run -d --name kong-dp \
   -e "KONG_ROLE=data_plane" \
   -e "KONG_DATABASE=off" \
   -e "KONG_CLUSTER_CONTROL_PLANE=<your-cp>.us.cp.konghq.com:443" \
@@ -389,10 +404,27 @@ docker run -d --name kong-dp-custom \
   -e "KONG_CLUSTER_RPC=on" \
   -e "KONG_TRACING_INSTRUMENTATIONS=all" \
   -e "KONG_TRACING_SAMPLING_RATE=1.0" \
+  -e "KONG_PLUGINS=bundled,kong-did-interceptor,kong-did-verifier,kong-worm-logger" \
+  -e "KONG_PLUGINSERVER_NAMES=kong-did-interceptor,kong-did-verifier,kong-worm-logger" \
+  -e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_START_CMD=/opt/kong/plugins/kong-did-interceptor" \
+  -e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_QUERY_CMD=/opt/kong/plugins/kong-did-interceptor -dump" \
+  -e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_START_CMD=/opt/kong/plugins/kong-did-verifier" \
+  -e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_QUERY_CMD=/opt/kong/plugins/kong-did-verifier -dump" \
+  -e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_START_CMD=/opt/kong/plugins/kong-worm-logger" \
+  -e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_QUERY_CMD=/opt/kong/plugins/kong-worm-logger -dump" \
+  -v "$(pwd)/plugins/kong-did-interceptor/kong-did-interceptor:/opt/kong/plugins/kong-did-interceptor" \
+  -v "$(pwd)/plugins/kong-did-verifier/kong-did-verifier:/opt/kong/plugins/kong-did-verifier" \
+  -v "$(pwd)/plugins/kong-worm-logger/kong-worm-logger:/opt/kong/plugins/kong-worm-logger" \
   -p 8000:8000 \
   -p 8443:8443 \
-  kong-dp-custom
+  kong/kong-gateway:3.14
 ```
+
+Key points:
+- `KONG_PLUGINS=bundled,...` — tells Kong to load the custom plugins alongside bundled ones
+- `KONG_PLUGINSERVER_*` — configures Go plugin server socket/binary paths
+- `-v` flags — mount compiled Go binaries into the container at `/opt/kong/plugins/`
+- **No custom image** — uses stock `kong/kong-gateway:3.14`
 
 ### 3.4 Sync full config (with custom plugins)
 

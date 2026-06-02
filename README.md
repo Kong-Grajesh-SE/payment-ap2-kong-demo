@@ -1,6 +1,6 @@
 # Autonomous Commerce with Kong Enterprise + AP2 Protocol
 
-> **Branch: `phase-2-custom-plugins`** — Kong enforces zero-trust (DID provisioning, signature verification, WORM audit) via custom Go plugins. Requires a custom DP image.
+> **Branch: `phase-2-custom-plugins`** — Kong enforces zero-trust (DID provisioning, signature verification, WORM audit) via custom Go plugins.
 >
 > For the simpler approach (agents self-manage, no DP changes), see [`main`](../../tree/main).
 
@@ -64,7 +64,7 @@ A demonstration of **autonomous agent-to-agent payments** governed by Kong Gatew
 | **Konnect Debugger** | Live request inspection with `KONG_CLUSTER_RPC=on` |
 | **Konnect Analytics** | Full visibility into agent-to-agent traffic patterns |
 | **decK `--select-tag`** | Additive config — doesn't touch existing gateway setup |
-| **Custom plugin schemas** | Uploaded to Konnect CP; Go binaries baked into DP image |
+| **Custom plugin schemas** | Uploaded to Konnect CP; plugin files installed on DP via volume mount |
 
 ## AP2 Protocol Flow
 
@@ -169,11 +169,11 @@ config/
   otel-collector.yml     # OTel Collector → Jaeger config
 
 plugins/
-  Dockerfile.kong-dp     # Multi-stage build: Go plugins → custom DP image
   kong-did-interceptor/  # Provisions DID before request reaches agent
-    handler.go           # Access-phase logic
-    schema.lua           # Full schema (used on DP)
-    schema.konnect.lua   # Simplified schema (uploaded to Konnect CP)
+    handler.go           # Go plugin server entry + handler logic
+    main.go              # Plugin server main (PDK)
+    schema.lua           # Full schema with typedefs (installed on DP)
+    schema.konnect.lua   # Simplified schema, no require() (uploaded to Konnect CP)
   kong-did-verifier/     # Verifies DID signature on agent responses
   kong-worm-logger/      # Writes WORM audit record independently
 
@@ -216,15 +216,16 @@ In the `main` branch, agents self-manage DID/audit. This works but requires trus
 
 This means agents **cannot** bypass identity or audit — the gateway layer is the single source of truth.
 
-### Why a custom DP image?
-Kong's Go plugin support requires compiling plugins into the data plane binary. The `plugins/Dockerfile.kong-dp` multi-stage build:
-1. Compiles each Go plugin into a shared object
-2. Copies the `.so` files into the Kong DP image
-3. Configures `KONG_PLUGINSERVER_NAMES` and plugin paths
+### How are custom plugins distributed? (Konnect Hybrid Mode)
+Per [Kong docs](https://developer.konghq.com/custom-plugins/konnect-hybrid-mode/), in Konnect hybrid mode:
+1. **Upload `schema.konnect.lua`** to the Control Plane via API — Konnect uses it for config validation and the plugin catalog
+2. **Install plugin files on each DP node** — via volume mount or copy into the container
+
+No custom DP image needed. The Go plugin binaries are compiled locally and mounted into the stock Kong container.
 
 ### Why separate `schema.lua` and `schema.konnect.lua`?
-- `schema.lua` — Full schema with `typedefs` (used on the DP at runtime)
-- `schema.konnect.lua` — Simplified schema without `require` statements (uploaded to Konnect CP via API so it can render the plugin config form)
+- `schema.lua` — Full schema with `require "kong.db.schema.typedefs"` (installed on DP, used at runtime)
+- `schema.konnect.lua` — Same schema but self-contained, no `require()` statements (Konnect CP requirement per [docs](https://developer.konghq.com/custom-plugins/konnect-hybrid-mode/#requirements))
 
 ## Cleanup
 
@@ -244,7 +245,7 @@ docker compose down
 
 After completing the Phase 1 setup (see [SETUP.md](./SETUP.md)), add the custom plugins:
 
-### 1. Upload schemas to Konnect
+### 1. Upload schemas to Konnect CP
 
 ```bash
 export KONNECT_CONTROL_PLANE_ID="your-cp-id"
@@ -252,23 +253,37 @@ chmod +x scripts/upload-schemas.sh
 ./scripts/upload-schemas.sh
 ```
 
-### 2. Build custom DP image
+### 2. Build Go plugin binaries
 
 ```bash
-docker build -f plugins/Dockerfile.kong-dp -t kong-dp-custom .
+cd plugins/kong-did-interceptor && go build -o kong-did-interceptor . && cd -
+cd plugins/kong-did-verifier && go build -o kong-did-verifier . && cd -
+cd plugins/kong-worm-logger && go build -o kong-worm-logger . && cd -
 ```
 
-### 3. Replace the vanilla DP
+### 3. Restart DP with plugin volume mounts
 
 ```bash
-docker stop kong-dp
-docker run -d --name kong-dp-custom \
+docker stop kong-dp && docker rm kong-dp
+
+docker run -d --name kong-dp \
   # ... (same Konnect flags as Phase 1) ...
   -e "KONG_CLUSTER_RPC=on" \
   -e "KONG_TRACING_INSTRUMENTATIONS=all" \
   -e "KONG_TRACING_SAMPLING_RATE=1.0" \
+  -e "KONG_PLUGINS=bundled,kong-did-interceptor,kong-did-verifier,kong-worm-logger" \
+  -e "KONG_PLUGINSERVER_NAMES=kong-did-interceptor,kong-did-verifier,kong-worm-logger" \
+  -e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_START_CMD=/opt/kong/plugins/kong-did-interceptor" \
+  -e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_QUERY_CMD=/opt/kong/plugins/kong-did-interceptor -dump" \
+  -e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_START_CMD=/opt/kong/plugins/kong-did-verifier" \
+  -e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_QUERY_CMD=/opt/kong/plugins/kong-did-verifier -dump" \
+  -e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_START_CMD=/opt/kong/plugins/kong-worm-logger" \
+  -e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_QUERY_CMD=/opt/kong/plugins/kong-worm-logger -dump" \
+  -v "$(pwd)/plugins/kong-did-interceptor/kong-did-interceptor:/opt/kong/plugins/kong-did-interceptor" \
+  -v "$(pwd)/plugins/kong-did-verifier/kong-did-verifier:/opt/kong/plugins/kong-did-verifier" \
+  -v "$(pwd)/plugins/kong-worm-logger/kong-worm-logger:/opt/kong/plugins/kong-worm-logger" \
   -p 8000:8000 -p 8443:8443 \
-  kong-dp-custom
+  kong/kong-gateway:3.14
 ```
 
 ### 4. Sync full config (with custom plugins)
@@ -288,11 +303,12 @@ Now every agent call goes through DID provisioning → agent → DID verificatio
 | Branch | What | DP Change Required? |
 |--------|------|---------------------|
 | [`main`](../../tree/main) | Phase 1 — Agent routes + ai-a2a-proxy (bundled). Agents self-manage DID and audit. | **No** |
-| `phase-2-custom-plugins` (this) | Phase 2 — Custom Go plugins (kong-did-interceptor, kong-did-verifier, kong-worm-logger). Kong enforces zero-trust. | **Yes** (custom DP image) |
+| `phase-2-custom-plugins` (this) | Phase 2 — Custom Go plugins (kong-did-interceptor, kong-did-verifier, kong-worm-logger). Kong enforces zero-trust. | **Yes** (volume mount Go binaries) |
 
 ## Related Documentation
 
 - [SETUP.md](./SETUP.md) — Detailed step-by-step setup guide with sample responses
 - [ai-a2a-proxy plugin](https://docs.konghq.com/hub/kong-inc/ai-a2a-proxy/)
 - [Custom plugins in Konnect hybrid mode](https://developer.konghq.com/custom-plugins/konnect-hybrid-mode/)
+- [Custom plugin installation & distribution](https://developer.konghq.com/custom-plugins/installation-and-distribution/)
 - [decK CLI](https://docs.konghq.com/deck/latest/)
