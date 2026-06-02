@@ -372,11 +372,12 @@ AGENTS=("search" "cart-intent" "cart-mandate" "payment")
 ALL_OK=true
 
 for agent_name in "${AGENTS[@]}"; do
+  # ai-a2a-proxy returns 400 for unknown JSON-RPC methods — that still proves reachability
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KONG_URL/agents/$agent_name" \
     -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","method":"health/check","params":{},"id":"setup-verify"}' 2>/dev/null || echo "000")
+    -d '{"jsonrpc":"2.0","method":"tasks/resolve","params":{},"id":"setup-verify"}' 2>/dev/null || echo "000")
 
-  if [ "$HTTP_CODE" = "200" ]; then
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "400" ]; then
     success "$agent_name agent reachable via Kong ($KONG_URL/agents/$agent_name)"
   else
     fail "$agent_name agent returned HTTP $HTTP_CODE via Kong"
