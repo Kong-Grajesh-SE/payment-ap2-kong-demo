@@ -211,7 +211,7 @@ In the `main` branch, agents self-manage DID/audit. This works but requires trus
 | Plugin | Phase | What It Does |
 |--------|-------|-------------|
 | `kong-did-interceptor` | Access | Provisions a DID for each agent if it doesn't have one. Injects `X-Agent-DID` header. |
-| `kong-did-verifier` | Response | Verifies the Ed25519 signature in `_meta.sender_did` matches the response body. |
+| `kong-did-verifier` | Access | Verifies the Ed25519 DID signature against the request body. Blocks if invalid. |
 | `kong-worm-logger` | Log | Writes an immutable record of every A2A interaction to WORM storage. |
 
 This means agents **cannot** bypass identity or audit — the gateway layer is the single source of truth.
@@ -261,30 +261,28 @@ cd plugins/kong-did-verifier && go build -o kong-did-verifier . && cd -
 cd plugins/kong-worm-logger && go build -o kong-worm-logger . && cd -
 ```
 
-### 3. Restart DP with plugin volume mounts
+### 3. Add plugins to your existing DP
+
+Add these to your existing Kong DP configuration (env vars + volume mounts):
 
 ```bash
-docker stop kong-dp && docker rm kong-dp
+# Additional env vars for your existing docker run / compose / K8s spec:
+-e "KONG_PLUGINS=bundled,kong-did-interceptor,kong-did-verifier,kong-worm-logger"
+-e "KONG_PLUGINSERVER_NAMES=kong-did-interceptor,kong-did-verifier,kong-worm-logger"
+-e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_START_CMD=/opt/kong/plugins/kong-did-interceptor"
+-e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_QUERY_CMD=/opt/kong/plugins/kong-did-interceptor -dump"
+-e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_START_CMD=/opt/kong/plugins/kong-did-verifier"
+-e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_QUERY_CMD=/opt/kong/plugins/kong-did-verifier -dump"
+-e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_START_CMD=/opt/kong/plugins/kong-worm-logger"
+-e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_QUERY_CMD=/opt/kong/plugins/kong-worm-logger -dump"
 
-docker run -d --name kong-dp \
-  # ... (same Konnect flags as Phase 1) ...
-  -e "KONG_CLUSTER_RPC=on" \
-  -e "KONG_TRACING_INSTRUMENTATIONS=all" \
-  -e "KONG_TRACING_SAMPLING_RATE=1.0" \
-  -e "KONG_PLUGINS=bundled,kong-did-interceptor,kong-did-verifier,kong-worm-logger" \
-  -e "KONG_PLUGINSERVER_NAMES=kong-did-interceptor,kong-did-verifier,kong-worm-logger" \
-  -e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_START_CMD=/opt/kong/plugins/kong-did-interceptor" \
-  -e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_QUERY_CMD=/opt/kong/plugins/kong-did-interceptor -dump" \
-  -e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_START_CMD=/opt/kong/plugins/kong-did-verifier" \
-  -e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_QUERY_CMD=/opt/kong/plugins/kong-did-verifier -dump" \
-  -e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_START_CMD=/opt/kong/plugins/kong-worm-logger" \
-  -e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_QUERY_CMD=/opt/kong/plugins/kong-worm-logger -dump" \
-  -v "$(pwd)/plugins/kong-did-interceptor/kong-did-interceptor:/opt/kong/plugins/kong-did-interceptor" \
-  -v "$(pwd)/plugins/kong-did-verifier/kong-did-verifier:/opt/kong/plugins/kong-did-verifier" \
-  -v "$(pwd)/plugins/kong-worm-logger/kong-worm-logger:/opt/kong/plugins/kong-worm-logger" \
-  -p 8000:8000 -p 8443:8443 \
-  kong/kong-gateway:3.14
+# Mount compiled binaries into the container:
+-v "/path/to/kong-did-interceptor:/opt/kong/plugins/kong-did-interceptor"
+-v "/path/to/kong-did-verifier:/opt/kong/plugins/kong-did-verifier"
+-v "/path/to/kong-worm-logger:/opt/kong/plugins/kong-worm-logger"
 ```
+
+Then recreate/restart the DP container. Your existing Konnect connection, certs, and config stay the same — you're only adding plugin support. See [SETUP.md](./SETUP.md) for Docker / Docker Compose / Kubernetes specifics.
 
 ### 4. Sync full config (with custom plugins)
 

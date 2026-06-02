@@ -383,48 +383,76 @@ cd plugins/kong-did-verifier && GOOS=linux GOARCH=amd64 go build -o kong-did-ver
 cd plugins/kong-worm-logger && GOOS=linux GOARCH=amd64 go build -o kong-worm-logger . && cd -
 ```
 
-### 3.3 Restart DP with plugin files mounted
+### 3.3 Add plugins to your existing Data Plane
 
-Per [Kong docs](https://developer.konghq.com/custom-plugins/installation-and-distribution/#via-a-dockerfile-or-docker-run-install-and-load), install plugin files on the DP node via volume mount:
+You likely already have a Kong DP running. You only need to **add** the following to your existing DP configuration:
 
+#### What to add to your existing `docker run` (or docker-compose / K8s spec):
+
+**Additional environment variables:**
 ```bash
-# Stop existing DP
-docker stop kong-dp && docker rm kong-dp
+# Tell Kong about the custom plugins
+-e "KONG_PLUGINS=bundled,kong-did-interceptor,kong-did-verifier,kong-worm-logger"
 
-# Start DP with Go plugin binaries volume-mounted
+# Go plugin server configuration
+-e "KONG_PLUGINSERVER_NAMES=kong-did-interceptor,kong-did-verifier,kong-worm-logger"
+-e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_START_CMD=/opt/kong/plugins/kong-did-interceptor"
+-e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_QUERY_CMD=/opt/kong/plugins/kong-did-interceptor -dump"
+-e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_START_CMD=/opt/kong/plugins/kong-did-verifier"
+-e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_QUERY_CMD=/opt/kong/plugins/kong-did-verifier -dump"
+-e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_START_CMD=/opt/kong/plugins/kong-worm-logger"
+-e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_QUERY_CMD=/opt/kong/plugins/kong-worm-logger -dump"
+```
+
+**Additional volume mounts** (map compiled binaries into the container):
+```bash
+-v "/path/to/kong-did-interceptor:/opt/kong/plugins/kong-did-interceptor"
+-v "/path/to/kong-did-verifier:/opt/kong/plugins/kong-did-verifier"
+-v "/path/to/kong-worm-logger:/opt/kong/plugins/kong-worm-logger"
+```
+
+#### Applying the change
+
+**Docker** — Container env vars and volumes can't be changed at runtime, so recreate:
+```bash
+# Note your existing container's full config first
+docker inspect kong-dp --format '{{json .Config}}' > /tmp/kong-dp-config.json
+
+# Recreate with additional flags
+docker stop kong-dp && docker rm kong-dp
 docker run -d --name kong-dp \
-  -e "KONG_ROLE=data_plane" \
-  -e "KONG_DATABASE=off" \
-  -e "KONG_CLUSTER_CONTROL_PLANE=<your-cp>.us.cp.konghq.com:443" \
-  -e "KONG_CLUSTER_SERVER_NAME=<your-cp>.us.cp.konghq.com" \
-  -e "KONG_CLUSTER_TELEMETRY_ENDPOINT=<your-cp>.us.tp.konghq.com:443" \
-  -e "KONG_CLUSTER_TELEMETRY_SERVER_NAME=<your-cp>.us.tp.konghq.com" \
-  -e "KONG_CLUSTER_CERT=<path-to-cert>" \
-  -e "KONG_CLUSTER_CERT_KEY=<path-to-key>" \
-  -e "KONG_CLUSTER_RPC=on" \
-  -e "KONG_TRACING_INSTRUMENTATIONS=all" \
-  -e "KONG_TRACING_SAMPLING_RATE=1.0" \
-  -e "KONG_PLUGINS=bundled,kong-did-interceptor,kong-did-verifier,kong-worm-logger" \
-  -e "KONG_PLUGINSERVER_NAMES=kong-did-interceptor,kong-did-verifier,kong-worm-logger" \
-  -e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_START_CMD=/opt/kong/plugins/kong-did-interceptor" \
-  -e "KONG_PLUGINSERVER_KONG_DID_INTERCEPTOR_QUERY_CMD=/opt/kong/plugins/kong-did-interceptor -dump" \
-  -e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_START_CMD=/opt/kong/plugins/kong-did-verifier" \
-  -e "KONG_PLUGINSERVER_KONG_DID_VERIFIER_QUERY_CMD=/opt/kong/plugins/kong-did-verifier -dump" \
-  -e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_START_CMD=/opt/kong/plugins/kong-worm-logger" \
-  -e "KONG_PLUGINSERVER_KONG_WORM_LOGGER_QUERY_CMD=/opt/kong/plugins/kong-worm-logger -dump" \
-  -v "$(pwd)/plugins/kong-did-interceptor/kong-did-interceptor:/opt/kong/plugins/kong-did-interceptor" \
-  -v "$(pwd)/plugins/kong-did-verifier/kong-did-verifier:/opt/kong/plugins/kong-did-verifier" \
-  -v "$(pwd)/plugins/kong-worm-logger/kong-worm-logger:/opt/kong/plugins/kong-worm-logger" \
-  -p 8000:8000 \
-  -p 8443:8443 \
+  ... (your existing flags) ...
+  ... (add the env vars and volumes above) ...
   kong/kong-gateway:3.14
 ```
 
-Key points:
-- `KONG_PLUGINS=bundled,...` — tells Kong to load the custom plugins alongside bundled ones
-- `KONG_PLUGINSERVER_*` — configures Go plugin server socket/binary paths
-- `-v` flags — mount compiled Go binaries into the container at `/opt/kong/plugins/`
-- **No custom image** — uses stock `kong/kong-gateway:3.14`
+**Docker Compose** — Add to your existing service definition, then:
+```bash
+docker compose up -d    # only recreates the changed service
+```
+
+**Kubernetes** — Add env vars and volume mounts to your existing DP Deployment spec:
+```yaml
+# In your Kong DP Deployment spec, add to containers[0]:
+env:
+  - name: KONG_PLUGINS
+    value: "bundled,kong-did-interceptor,kong-did-verifier,kong-worm-logger"
+  - name: KONG_PLUGINSERVER_NAMES
+    value: "kong-did-interceptor,kong-did-verifier,kong-worm-logger"
+  # ... (START_CMD and QUERY_CMD for each plugin)
+volumeMounts:
+  - name: custom-plugins
+    mountPath: /opt/kong/plugins
+volumes:
+  - name: custom-plugins
+    configMap:
+      name: kong-custom-plugins   # or hostPath / PVC with the binaries
+```
+Then `kubectl rollout restart deployment/kong-dp`.
+
+> **Key point:** You're adding to your existing DP — not replacing it. Your existing
+> Konnect connection, certificates, and configuration stay exactly the same.
+> The only additions are the plugin env vars and binary mounts.
 
 ### 3.4 Sync full config (with custom plugins)
 
@@ -469,10 +497,10 @@ In the response, look for:
 
 This branch demonstrates the full zero-trust approach. Every agent call now goes through:
 
-1. **kong-did-interceptor** (Access phase) — provisions/injects DID
-2. **Agent processes request** — signs response with its DID key
-3. **kong-did-verifier** (Response phase) — verifies Ed25519 signature
-4. **kong-worm-logger** (Log phase) — writes immutable audit record
+1. **kong-did-interceptor** (Access phase) — provisions DID, signs request body, injects headers
+2. **kong-did-verifier** (Access phase) — resolves DID, verifies Ed25519 signature against request body
+3. **Agent processes request** — receives verified identity context
+4. **kong-worm-logger** (Log phase) — writes immutable audit record after response
 
 Agents cannot bypass identity or audit — Kong is the single source of truth.
 
