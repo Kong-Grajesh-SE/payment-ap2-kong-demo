@@ -343,3 +343,9 @@ echo "  Observability:"
 echo "    Jaeger UI:        http://localhost:16686"
 echo "    Konnect Debugger: https://cloud.konghq.com (Gateway Manager → Debugger)"
 echo ""
+# ai-a2a-proxy returns 400 for unknown JSON-RPC methods — that still proves reachability
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KONG_URL/agents/$agent_name" \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","method":"tasks/resolve","params":{},"id":"setup-verify"}' 2>/dev/null || echo "000")
+
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "4
