@@ -1,0 +1,94 @@
+# ─── AP2 Agent Mesh Addon ────────────────────────────────────────────
+# This file contains ONLY what gets added to an existing Kong Gateway.
+#
+# Prerequisites (customer already has):
+#   - Kong Gateway (any 3.x) with Konnect or self-managed
+#   - OpenTelemetry plugin (bundled) — already configured
+#   - LLM route (e.g., Mistral at /llm) — already configured
+#
+# What this adds:
+#   - 4 agent services + routes (A2A JSON-RPC endpoints)
+#   - ai-a2a-proxy plugin on each (bundled, zero DP changes)
+#
+# Usage:
+#   deck gateway sync --select-tag ap2-agents \
+#     --konnect-token $TOKEN --konnect-control-plane-name $CP \
+#     config/kong.deck.clean.yml
+#
+# This is ADDITIVE — existing services, routes, and plugins are untouched.
+# ─────────────────────────────────────────────────────────────────────
+_format_version: "3.0"
+
+services:
+  - name: search-svc
+    url: http://host.docker.internal:9001
+    tags: [ap2-agents]
+    routes:
+      - name: search-route
+        paths:
+          - /agents/search
+        strip_path: true
+        tags: [ap2-agents]
+
+  - name: cart-intent-svc
+    url: http://host.docker.internal:9002
+    tags: [ap2-agents]
+    routes:
+      - name: cart-intent-route
+        paths:
+          - /agents/cart-intent
+        strip_path: true
+        tags: [ap2-agents]
+
+  - name: cart-mandate-svc
+    url: http://host.docker.internal:9003
+    tags: [ap2-agents]
+    routes:
+      - name: cart-mandate-route
+        paths:
+          - /agents/cart-mandate
+        strip_path: true
+        tags: [ap2-agents]
+
+  - name: payment-svc
+    url: http://host.docker.internal:9004
+    tags: [ap2-agents]
+    routes:
+      - name: payment-route
+        paths:
+          - /agents/payment
+        strip_path: true
+        tags: [ap2-agents]
+
+plugins:
+  - name: ai-a2a-proxy
+    service: search-svc
+    tags: [ap2-agents]
+    config:
+      logging:
+        log_statistics: true
+        log_payloads: true
+
+  - name: ai-a2a-proxy
+    service: cart-intent-svc
+    tags: [ap2-agents]
+    config:
+      logging:
+        log_statistics: true
+        log_payloads: true
+
+  - name: ai-a2a-proxy
+    service: cart-mandate-svc
+    tags: [ap2-agents]
+    config:
+      logging:
+        log_statistics: true
+        log_payloads: true
+
+  - name: ai-a2a-proxy
+    service: payment-svc
+    tags: [ap2-agents]
+    config:
+      logging:
+        log_statistics: true
+        log_payloads: true

@@ -1,0 +1,23 @@
+# ─── Baseline: What the customer already has ───────────────────────
+# This represents the EXISTING gateway config before AP2 is added.
+# It includes the LLM route and global OpenTelemetry plugin.
+# This file is NOT synced alongside AP2 — it's already deployed.
+# ───────────────────────────────────────────────────────────────────
+_format_version: "3.0"
+
+services:
+  - name: mistral-llm-svc
+    url: https://api.mistral.ai
+    routes:
+      - name: mistral-llm-route
+        paths:
+          - /llm
+        strip_path: true
+
+plugins:
+  - name: opentelemetry
+    config:
+      traces_endpoint: http://host.docker.internal:4318/v1/traces
+      resource_attributes:
+        service.name: kong-gateway
+      sampling_rate: 1.0

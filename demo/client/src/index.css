@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── BRAND ── voltage running through the system ── */
+    --kong-lime: rgb(204, 255, 0);
+    --kong-dark-green: rgb(0, 15, 6);
+    --kong-black: rgb(0, 0, 0);
+
+    /* ── GRAYSCALE ── warm desaturated greens ── */
+    --gray-50: rgb(231, 237, 229);
+    --gray-100: rgb(215, 222, 212);
+    --gray-200: rgb(186, 193, 184);
+    --gray-300: rgb(174, 181, 167);
+    --gray-400: rgb(161, 166, 159);
+    --gray-500: rgb(138, 144, 136);
+    --gray-600: rgb(74, 77, 73);
+    --gray-700: rgb(48, 53, 47);
+    --gray-800: rgb(36, 37, 41);
+    --gray-850: rgb(49, 57, 25);
+    --gray-900: rgb(13, 16, 5);
+
+    /* ── SEMANTIC ── */
+    --bg-0: var(--kong-dark-green);
+    --bg-100: var(--kong-black);
+    --bg-200: var(--gray-900);
+    --bg-300: var(--gray-700);
+
+    --fg-0: rgb(255, 255, 255);
+    --fg-1: var(--gray-200);
+    --fg-2: var(--gray-300);
+    --fg-3: var(--gray-400);
+
+    --border-subtle: var(--gray-850);
+    --border-default: var(--gray-600);
+    --accent: var(--kong-lime);
+    --accent-fg: var(--kong-black);
+    --accent-soft: rgba(204, 255, 0, 0.12);
+    --accent-glow: 0 0 94px 0 rgba(204, 255, 0, 0.5);
+
+    /* ── MOTION ── */
+    --ease-out-swift: cubic-bezier(.2,.8,.2,1);
+    --dur-xs: 120ms;
+    --dur-sm: 180ms;
+    --dur-md: 260ms;
+  }
+
+  body {
+    background: var(--bg-0);
+    color: var(--fg-0);
+    font-family: "Funnel Sans", "Inter", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  /* ── Blueprint grid overlay ── */
+  .blueprint::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, rgba(204,255,0,.18) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(204,255,0,.18) 1px, transparent 1px);
+    background-size: 120px 120px;
+    opacity: .14;
+    z-index: 0;
+  }
+
+  /* ── Chat bubbles ── */
+  .chat-bubble-user {
+    @apply bg-lime text-black rounded-sm px-4 py-3;
+    border-radius: 2px;
+  }
+  .chat-bubble-ai {
+    @apply rounded-sm px-4 py-3;
+    background: var(--bg-200);
+    color: var(--fg-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: 2px;
+  }
+
+  /* ── Cards ── */
+  .kong-card {
+    background: var(--bg-200);
+    border: 1px solid var(--border-subtle);
+    border-radius: 2px;
+    transition: border-color var(--dur-md) var(--ease-out-swift);
+  }
+  .kong-card:hover {
+    border-color: rgba(204, 255, 0, 0.4);
+  }
+
+  /* ── Buttons ── */
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 700;
+    border-radius: 10000px;
+    transition: background var(--dur-xs) var(--ease-out-swift),
+                transform var(--dur-xs) var(--ease-out-swift);
+  }
+  .btn-primary:hover {
+    background: rgb(184, 230, 0);
+  }
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--fg-0);
+    border: 1px solid var(--border-default);
+    border-radius: 10000px;
+    transition: border-color var(--dur-xs) var(--ease-out-swift);
+  }
+  .btn-secondary:hover {
+    border-color: var(--accent);
+  }
+
+  /* ── Glow effects ── */
+  .glow-lime {
+    box-shadow: 0 0 60px rgba(204, 255, 0, 0.45);
+  }
+  .glow-lime-soft {
+    box-shadow: 0 0 120px rgba(204, 255, 0, 0.22);
+  }
+}
+
+/* Custom scrollbar — dark theme */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--gray-600);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
+}

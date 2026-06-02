@@ -1,0 +1,157 @@
+version: "3.8"
+
+x-common-env: &common-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  DID_REGISTRY_URL: http://did-registry:8070
+
+services:
+  # ─── Layer 4: Trust Anchor ───────────────────────────────────────
+  worm-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${WORM_DB_USER:-worm_user}
+      POSTGRES_PASSWORD: ${WORM_DB_PASSWORD:-worm_secure_password}
+      POSTGRES_DB: ${WORM_DB_NAME:-audit_db}
+    volumes:
+      - worm-db-data:/var/lib/postgresql/data
+      - ./services/worm-storage/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - agent-mesh-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WORM_DB_USER:-worm_user} -d ${WORM_DB_NAME:-audit_db}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317"          # OTLP gRPC (internal)
+      - "4319:4318"     # OTLP HTTP (for Kong)
+    networks:
+      - agent-mesh-net
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.100.0
+    command: ["--config", "/etc/otel/config.yml"]
+    volumes:
+      - ./config/otel-collector.yml:/etc/otel/config.yml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    depends_on:
+      - jaeger
+    networks:
+      - agent-mesh-net
+
+  did-registry:
+    build:
+      context: ./services/did-registry
+      dockerfile: Dockerfile
+    ports:
+      - "8070:8070"
+    environment:
+      <<: *common-env
+      DID_METHOD: ${DID_METHOD:-peer}
+      DID_WEB_DOMAIN: ${DID_WEB_DOMAIN:-localhost:8000}
+    networks:
+      - agent-mesh-net
+
+  worm-storage:
+    build:
+      context: ./services/worm-storage
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      <<: *common-env
+      WORM_DB_HOST: worm-db
+      WORM_DB_PORT: "5432"
+      WORM_DB_USER: ${WORM_DB_USER:-worm_user}
+      WORM_DB_PASSWORD: ${WORM_DB_PASSWORD:-worm_secure_password}
+      WORM_DB_NAME: ${WORM_DB_NAME:-audit_db}
+    depends_on:
+      worm-db:
+        condition: service_healthy
+    networks:
+      - agent-mesh-net
+
+  # ─── Layer 3: Internal Agent Mesh ────────────────────────────────
+  search-agent:
+    build:
+      context: ./services/agents
+      dockerfile: search/Dockerfile
+    ports:
+      - "9001:9001"
+    environment:
+      <<: *common-env
+      AGENT_PORT: "9001"
+      AGENT_NAME: search-agent
+      KONG_PROXY_URL: ${KONG_PROXY_URL:-http://host.docker.internal:8000}
+      DISABLE_AUTO_CHAIN: "true"
+    depends_on:
+      - did-registry
+    networks:
+      - agent-mesh-net
+
+  cart-intent-agent:
+    build:
+      context: ./services/agents
+      dockerfile: cart-intent/Dockerfile
+    ports:
+      - "9002:9002"
+    environment:
+      <<: *common-env
+      AGENT_PORT: "9002"
+      AGENT_NAME: cart-intent-agent
+      KONG_PROXY_URL: ${KONG_PROXY_URL:-http://host.docker.internal:8000}
+      DISABLE_AUTO_CHAIN: "true"
+    depends_on:
+      - did-registry
+    networks:
+      - agent-mesh-net
+
+  cart-mandate-agent:
+    build:
+      context: ./services/agents
+      dockerfile: cart-mandate/Dockerfile
+    ports:
+      - "9003:9003"
+    environment:
+      <<: *common-env
+      AGENT_PORT: "9003"
+      AGENT_NAME: cart-mandate-agent
+      KONG_PROXY_URL: ${KONG_PROXY_URL:-http://host.docker.internal:8000}
+      DISABLE_AUTO_CHAIN: "true"
+    depends_on:
+      - did-registry
+    networks:
+      - agent-mesh-net
+
+  payment-agent:
+    build:
+      context: ./services/agents
+      dockerfile: payment/Dockerfile
+    ports:
+      - "9004:9004"
+    environment:
+      <<: *common-env
+      AGENT_PORT: "9004"
+      AGENT_NAME: payment-agent
+      KONG_PROXY_URL: ${KONG_PROXY_URL:-http://host.docker.internal:8000}
+    depends_on:
+      - did-registry
+    networks:
+      - agent-mesh-net
+
+volumes:
+  worm-db-data:
+
+networks:
+  agent-mesh-net:
+    driver: bridge
