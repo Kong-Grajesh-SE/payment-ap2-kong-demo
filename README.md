@@ -8,56 +8,7 @@ A demonstration of **autonomous agent-to-agent payments** governed by Kong Gatew
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ Demo UI (React)                                                       │
-│ http://localhost:5173                                                  │
-└───────────────┬──────────────────────────────────────────────────────┘
-                │ SSE (chat flow)
-                ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│ BFF Server (Node.js/Express + Volcano SDK)                            │
-│ http://localhost:3001                                                  │
-│ • Extracts intent via Mistral LLM (through Kong /llm route)          │
-│ • Orchestrates 4-step AP2 flow (through Kong /agents/* routes)       │
-│ • Uses @volcano.dev/agent SDK with llmMistral() → Kong baseURL      │
-└───────────────┬──────────────────────────────────────────────────────┘
-                │ All requests via Kong (LLM + A2A agents)
-                ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│ Kong Gateway (Konnect DP)  http://localhost:8000                      │
-│                                                                       │
-│ ┌───────────────────────────────────────────────────────────────────┐│
-│ │ Global: opentelemetry                                             ││
-│ └───────────────────────────────────────────────────────────────────┘│
-│                                                                       │
-│ ┌─────────────────────┐  ┌──────────────────────────────────────┐   │
-│ │ Route: /llm         │  │ Routes: /agents/{search,cart-*,pay*} │   │
-│ │ → api.mistral.ai    │  │ Plugins per route:                   │   │
-│ │                     │  │  • kong-did-interceptor (custom)     │   │
-│ │                     │  │  • kong-did-verifier   (custom)     │   │
-│ │                     │  │  • ai-a2a-proxy        (bundled)    │   │
-│ │                     │  │  • kong-worm-logger    (custom)     │   │
-│ └────────┬────────────┘  └────────────────┬─────────────────────┘   │
-└──────────┼────────────────────────────────┼─────────────────────────┘
-           │                    ┌───────────┼───────────┬──────────┐
-           ▼                    ▼           ▼           ▼          ▼
-    ┌─────────────┐      ┌────────┐  ┌────────┐ ┌──────────┐ ┌────────┐
-    │ Mistral AI  │      │ Search │  │ Cart   │ │ Cart     │ │Payment │
-    │ (LLM)      │      │ Agent  │  │ Intent │ │ Mandate  │ │ Agent  │
-    │ mistral.ai  │      │ :9001  │  │ :9002  │ │ :9003    │ │ :9004  │
-    └─────────────┘      └───┬────┘  └───┬────┘ └────┬─────┘ └───┬────┘
-                             │           │            │           │
-                             └───────────┴────────────┴───────────┘
-                                              │
-                               ┌──────────────┼──────────────┐
-                               ▼                             ▼
-                         ┌───────────┐                ┌───────────┐
-                         │ DID       │                │ WORM      │
-                         │ Registry  │                │ Storage   │
-                         │ :8070     │                │ :8090     │
-                         └───────────┘                └───────────┘
-```
+![Architecture Diagram](assets/architecture_diagram.png)
 
 ## What This Demonstrates
 
@@ -102,12 +53,7 @@ This means **every LLM call** (intent extraction, greeting detection, receipt ge
 
 ## AP2 Protocol Flow
 
-```
-Step 1: search/execute      → IntentMandate (Ed25519 signed)
-Step 2: cart/addIntent      → CartMandate (Ed25519 signed)
-Step 3: cart/confirmMandate → PaymentMandate (DPAN + authCode)
-Step 4: payment/execute     → Settlement (receipt + audit)
-```
+![AP2 Protocol Flow](assets/ap2_flow.png)
 
 Each mandate is cryptographically signed by the issuing agent's DID. The chain of mandates forms a verifiable audit trail.
 

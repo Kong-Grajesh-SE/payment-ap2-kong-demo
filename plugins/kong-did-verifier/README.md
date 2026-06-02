@@ -10,16 +10,7 @@ Without this plugin, a forged `X-Agent-DID` header with an invalid signature cou
 
 ## How It Works
 
-```
-Request → [kong-did-interceptor] → [kong-did-verifier] → Upstream Agent
-                                          │
-                                          ├─ Resolves DID Document from Registry
-                                          ├─ Extracts Ed25519 public key
-                                          ├─ Verifies signature against body
-                                          │
-                                          ├─ ✅ Pass: sets X-Kong-DID-Verified: true
-                                          └─ ❌ Fail: returns JSON-RPC error -32003
-```
+![kong-did-verifier Plugin](../../assets/did_verifier.png)
 
 1. Reads `X-Agent-DID` and `X-DID-Signature` headers
 2. Resolves the DID Document from the DID Registry to extract the public key

@@ -13,10 +13,7 @@ This works for demos, but in production it means **you must trust every agent**.
 
 These plugins solve that by making Kong the **single enforcement point**:
 
-```
-Request → [kong-did-interceptor] → Agent → [kong-did-verifier] → [kong-worm-logger] → Response
-              (Access phase)                  (Access phase)         (Log phase)
-```
+![Kong Gateway Trust Enforcement](../assets/plugin_enforcement.png)
 
 | Guarantee | Without Plugins | With Plugins |
 |-----------|----------------|--------------|
@@ -99,28 +96,7 @@ Request → [kong-did-interceptor] → Agent → [kong-did-verifier] → [kong-w
 
 All three plugins run on each agent service route. Kong executes them by priority:
 
-```
-Request arrives at Kong
-  │
-  ├─ 1. kong-did-interceptor (priority: 1000)
-  │     → Provisions DID, signs body, injects headers
-  │
-  ├─ 2. kong-did-verifier (priority: 900)
-  │     → Resolves DID, verifies signature
-  │     → Blocks request if signature invalid
-  │
-  ├─ 3. ai-a2a-proxy (bundled)
-  │     → A2A protocol awareness, logging
-  │
-  ▼ [Request forwarded to agent]
-  
-  ... agent processes and responds ...
-
-  ├─ 4. kong-worm-logger (log phase, priority: 100)
-  │     → Writes immutable audit record
-  │
-  ▼ Response returned to caller
-```
+![Kong Gateway Plugin Execution Order](../assets/plugin_execution.png)
 
 ---
 

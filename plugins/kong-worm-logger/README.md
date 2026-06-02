@@ -10,9 +10,7 @@ Without this plugin, each agent writes its own audit records. A compromised agen
 
 ## How It Works
 
-```
-Request → [Access: capture body] → Agent → Response → [Log: write WORM record]
-```
+![kong-worm-logger Plugin](../../assets/worm_logger.png)
 
 This plugin operates in two phases:
 

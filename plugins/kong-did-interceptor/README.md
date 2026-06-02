@@ -10,9 +10,7 @@ Without this plugin, agents must self-register DIDs. A compromised agent could s
 
 ## How It Works
 
-```
-Request → [kong-did-interceptor] → Upstream Agent
-```
+![kong-did-interceptor Plugin](../../assets/did_interceptor.png)
 
 1. Checks if `X-Agent-DID` header already exists (agent-provided identity)
 2. If not, calls DID Registry to provision a new `did:peer` (Ed25519 key pair)
