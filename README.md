@@ -1,10 +1,10 @@
 # Autonomous Commerce with Kong Enterprise + AP2 Protocol
 
-> **Branch: `phase-2-custom-plugins`** — Kong enforces zero-trust (DID provisioning, signature verification, WORM audit) via custom Go plugins.
+> **Branch: `phase-2-custom-plugins`** - Kong enforces zero-trust (DID provisioning, signature verification, WORM audit) via custom Go plugins.
 >
 > For the simpler approach (agents self-manage, no DP changes), see [`main`](../../tree/main).
 
-A demonstration of **autonomous agent-to-agent payments** governed by Kong Gateway. Four independent AI agents negotiate, authorize, and settle payments using the **AP2 (Autonomous Payment Protocol)** — with every hop routed through Kong. In this branch, **Kong is the trust authority**: it provisions DIDs, verifies signatures, and writes immutable audit records independently of the agents.
+A demonstration of **autonomous agent-to-agent payments** governed by Kong Gateway. Four independent AI agents negotiate, authorize, and settle payments using the **AP2 (Autonomous Payment Protocol)** - with every hop routed through Kong. In this branch, **Kong is the trust authority**: it provisions DIDs, verifies signatures, and writes immutable audit records independently of the agents.
 
 ## Architecture
 
@@ -63,7 +63,7 @@ A demonstration of **autonomous agent-to-agent payments** governed by Kong Gatew
 | **OpenTelemetry** (bundled) | Every agent call gets distributed tracing |
 | **Konnect Debugger** | Live request inspection with `KONG_CLUSTER_RPC=on` |
 | **Konnect Analytics** | Full visibility into agent-to-agent traffic patterns |
-| **decK `--select-tag`** | Additive config — doesn't touch existing gateway setup |
+| **decK `--select-tag`** | Additive config - doesn't touch existing gateway setup |
 | **Custom plugin schemas** | Uploaded to Konnect CP; plugin files installed on DP via volume mount |
 
 ## AP2 Protocol Flow
@@ -124,7 +124,7 @@ deck gateway sync \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
   config/baseline.yml
 
-# Agent mesh (additive — won't touch existing config)
+# Agent mesh (additive - won't touch existing config)
 deck gateway sync \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
@@ -191,7 +191,7 @@ services/
   worm-storage/          # Write-Once-Read-Many audit (PostgreSQL)
 
 demo/
-  server/                # BFF (Node.js/Express) — orchestrates AP2 via Kong
+  server/                # BFF (Node.js/Express) - orchestrates AP2 via Kong
   client/                # React UI (Tailwind CSS)
 
 docker-compose.yml       # All services + OTel + Jaeger
@@ -200,7 +200,7 @@ docker-compose.yml       # All services + OTel + Jaeger
 ## Key Design Decisions
 
 ### Why `--select-tag ap2-agents`?
-decK's `--select-tag` makes sync **additive**. It only manages entities with that tag — your existing services, routes, and plugins remain untouched. This is how you safely add AP2 to a production gateway.
+decK's `--select-tag` makes sync **additive**. It only manages entities with that tag - your existing services, routes, and plugins remain untouched. This is how you safely add AP2 to a production gateway.
 
 ### Why `ai-a2a-proxy`?
 This bundled plugin understands A2A/JSON-RPC 2.0 semantics. It logs agent interaction statistics and payloads, giving Kong protocol-level awareness of the agent mesh.
@@ -214,18 +214,18 @@ In the `main` branch, agents self-manage DID/audit. This works but requires trus
 | `kong-did-verifier` | Access | Verifies the Ed25519 DID signature against the request body. Blocks if invalid. |
 | `kong-worm-logger` | Log | Writes an immutable record of every A2A interaction to WORM storage. |
 
-This means agents **cannot** bypass identity or audit — the gateway layer is the single source of truth.
+This means agents **cannot** bypass identity or audit - the gateway layer is the single source of truth.
 
 ### How are custom plugins distributed? (Konnect Hybrid Mode)
 Per [Kong docs](https://developer.konghq.com/custom-plugins/konnect-hybrid-mode/), in Konnect hybrid mode:
-1. **Upload `schema.konnect.lua`** to the Control Plane via API — Konnect uses it for config validation and the plugin catalog
-2. **Install plugin files on each DP node** — via volume mount or copy into the container
+1. **Upload `schema.konnect.lua`** to the Control Plane via API - Konnect uses it for config validation and the plugin catalog
+2. **Install plugin files on each DP node** - via volume mount or copy into the container
 
 No custom DP image needed. The Go plugin binaries are compiled locally and mounted into the stock Kong container.
 
 ### Why separate `schema.lua` and `schema.konnect.lua`?
-- `schema.lua` — Full schema with `require "kong.db.schema.typedefs"` (installed on DP, used at runtime)
-- `schema.konnect.lua` — Same schema but self-contained, no `require()` statements (Konnect CP requirement per [docs](https://developer.konghq.com/custom-plugins/konnect-hybrid-mode/#requirements))
+- `schema.lua` - Full schema with `require "kong.db.schema.typedefs"` (installed on DP, used at runtime)
+- `schema.konnect.lua` - Same schema but self-contained, no `require()` statements (Konnect CP requirement per [docs](https://developer.konghq.com/custom-plugins/konnect-hybrid-mode/#requirements))
 
 ## Cleanup
 
@@ -282,7 +282,7 @@ Add these to your existing Kong DP configuration (env vars + volume mounts):
 -v "/path/to/kong-worm-logger:/opt/kong/plugins/kong-worm-logger"
 ```
 
-Then recreate/restart the DP container. Your existing Konnect connection, certs, and config stay the same — you're only adding plugin support. See [SETUP.md](./SETUP.md) for Docker / Docker Compose / Kubernetes specifics.
+Then recreate/restart the DP container. Your existing Konnect connection, certs, and config stay the same - you're only adding plugin support. See [SETUP.md](./SETUP.md) for Docker / Docker Compose / Kubernetes specifics.
 
 ### 4. Sync full config (with custom plugins)
 
@@ -300,12 +300,12 @@ Now every agent call goes through DID provisioning → agent → DID verificatio
 
 | Branch | What | DP Change Required? |
 |--------|------|---------------------|
-| [`main`](../../tree/main) | Phase 1 — Agent routes + ai-a2a-proxy (bundled). Agents self-manage DID and audit. | **No** |
-| `phase-2-custom-plugins` (this) | Phase 2 — Custom Go plugins (kong-did-interceptor, kong-did-verifier, kong-worm-logger). Kong enforces zero-trust. | **Yes** (volume mount Go binaries) |
+| [`main`](../../tree/main) | Phase 1 - Agent routes + ai-a2a-proxy (bundled). Agents self-manage DID and audit. | **No** |
+| `phase-2-custom-plugins` (this) | Phase 2 - Custom Go plugins (kong-did-interceptor, kong-did-verifier, kong-worm-logger). Kong enforces zero-trust. | **Yes** (volume mount Go binaries) |
 
 ## Related Documentation
 
-- [SETUP.md](./SETUP.md) — Detailed step-by-step setup guide with sample responses
+- [SETUP.md](./SETUP.md) - Detailed step-by-step setup guide with sample responses
 - [ai-a2a-proxy plugin](https://docs.konghq.com/hub/kong-inc/ai-a2a-proxy/)
 - [Custom plugins in Konnect hybrid mode](https://developer.konghq.com/custom-plugins/konnect-hybrid-mode/)
 - [Custom plugin installation & distribution](https://developer.konghq.com/custom-plugins/installation-and-distribution/)

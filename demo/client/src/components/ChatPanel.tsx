@@ -80,7 +80,7 @@ export default function ChatPanel({
             <p className="text-sm text-fg-3 mb-2 max-w-md">
               Tell me what you'd like to buy. I'll search merchant catalogs,
               let you pick a product and payment method, then complete a
-              DID-verified payment — following the AP2 human-present flow.
+              DID-verified payment - following the AP2 human-present flow.
             </p>
             <p className="text-xs text-fg-3 mb-6 max-w-sm font-mono" style={{ letterSpacing: "0.02em" }}>
               IntentMandate / CartMandate / PaymentMandate / OTP

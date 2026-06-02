@@ -45,7 +45,7 @@ upload_schema() {
   if [[ "$http_code" == "201" || "$http_code" == "200" ]]; then
     echo "✅ $plugin_name schema uploaded successfully"
   elif [[ "$http_code" == "409" ]]; then
-    echo "⚠️  $plugin_name schema already exists — updating..."
+    echo "⚠️  $plugin_name schema already exists - updating..."
     curl -s -X PUT \
       "$KONNECT_API/control-planes/$KONNECT_CONTROL_PLANE_ID/core-entities/plugin-schemas/$plugin_name" \
       -H "Authorization: Bearer $KONNECT_API_TOKEN" \
@@ -67,9 +67,9 @@ verify_schema() {
     -H "Authorization: Bearer $KONNECT_API_TOKEN")
 
   if [[ "$http_code" == "200" ]]; then
-    echo "  ✓ $plugin_name — verified in CP"
+    echo "  ✓ $plugin_name - verified in CP"
   else
-    echo "  ✗ $plugin_name — NOT found (HTTP $http_code)"
+    echo "  ✗ $plugin_name - NOT found (HTTP $http_code)"
   fi
 }
 

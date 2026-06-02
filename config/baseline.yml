@@ -1,7 +1,7 @@
 # ─── Baseline: What the customer already has ───────────────────────
 # This represents the EXISTING gateway config before AP2 is added.
 # It includes the LLM route and global OpenTelemetry plugin.
-# This file is NOT synced alongside AP2 — it's already deployed.
+# This file is NOT synced alongside AP2 - it's already deployed.
 # ───────────────────────────────────────────────────────────────────
 _format_version: "3.0"
 

@@ -6,7 +6,7 @@ A Kong Gateway Go plugin that verifies Ed25519 DID signatures on incoming reques
 
 After `kong-did-interceptor` provisions a DID and signs the request, this plugin independently verifies that signature by resolving the DID Document and checking the Ed25519 signature against the request body.
 
-Without this plugin, a forged `X-Agent-DID` header with an invalid signature could reach upstream agents unchallenged. With this plugin, Kong blocks any request where the signature doesn't match — preventing identity spoofing and payload tampering.
+Without this plugin, a forged `X-Agent-DID` header with an invalid signature could reach upstream agents unchallenged. With this plugin, Kong blocks any request where the signature doesn't match - preventing identity spoofing and payload tampering.
 
 ## How It Works
 

@@ -4,7 +4,7 @@ A Kong Gateway Go plugin that provisions W3C Decentralized Identifiers (DIDs) fo
 
 ## Purpose
 
-In the AP2 autonomous payment protocol, every agent interaction must carry a cryptographic identity. This plugin ensures that **Kong provisions the DID** — agents don't need to self-register or manage their own identity lifecycle.
+In the AP2 autonomous payment protocol, every agent interaction must carry a cryptographic identity. This plugin ensures that **Kong provisions the DID** - agents don't need to self-register or manage their own identity lifecycle.
 
 Without this plugin, agents must self-register DIDs. A compromised agent could skip registration or forge an identity. With this plugin, Kong guarantees every request has a verified DID before it reaches the upstream agent.
 
@@ -18,9 +18,9 @@ Request → [kong-did-interceptor] → Upstream Agent
 2. If not, calls DID Registry to provision a new `did:peer` (Ed25519 key pair)
 3. Signs the raw request body with the DID's private key
 4. Injects headers:
-   - `X-Agent-DID` — the provisioned DID identifier
-   - `X-DID-Provisioned-At` — ISO 8601 timestamp
-   - `X-DID-Signature` — base64url-encoded Ed25519 signature
+   - `X-Agent-DID` - the provisioned DID identifier
+   - `X-DID-Provisioned-At` - ISO 8601 timestamp
+   - `X-DID-Signature` - base64url-encoded Ed25519 signature
 5. Optionally injects a `kong_did_context` DataPart into A2A message parts
 
 ## Configuration

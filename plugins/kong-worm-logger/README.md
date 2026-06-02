@@ -4,7 +4,7 @@ A Kong Gateway Go plugin that writes immutable audit records to WORM (Write-Once
 
 ## Purpose
 
-In the AP2 autonomous payment protocol, every agent interaction must be audited with a tamper-proof record. This plugin ensures that **Kong writes the audit trail** — agents cannot bypass, alter, or omit records.
+In the AP2 autonomous payment protocol, every agent interaction must be audited with a tamper-proof record. This plugin ensures that **Kong writes the audit trail** - agents cannot bypass, alter, or omit records.
 
 Without this plugin, each agent writes its own audit records. A compromised agent could skip audit writes or forge records. With this plugin, Kong unconditionally writes an immutable record for every interaction, correlated with OpenTelemetry trace context and DID verification status.
 

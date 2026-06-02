@@ -49,7 +49,7 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	}
 
 	if signature == "" {
-		// DID present but no signature — newly provisioned, skip verification
+		// DID present but no signature - newly provisioned, skip verification
 		return
 	}
 
@@ -69,7 +69,7 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	}
 
 	// A2A: Verify signature directly against raw body
-	// (signature is in HTTP header, not embedded in body — no canonical reconstruction needed)
+	// (signature is in HTTP header, not embedded in body - no canonical reconstruction needed)
 	sigBytes, err := base64.RawURLEncoding.DecodeString(signature)
 	if err != nil {
 		kong.Log.Err(fmt.Sprintf("invalid signature encoding: %v", err))

@@ -4,7 +4,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        /* Kong Design System v1.3 — "Electric Lime on Dark Green" */
+        /* Kong Design System v1.3 - "Electric Lime on Dark Green" */
         lime: "rgb(204, 255, 0)",
         "lime-hover": "rgb(184, 230, 0)",
         "dark-green": "rgb(0, 15, 6)",

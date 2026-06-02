@@ -167,6 +167,6 @@ func provisionDID(registryURL, method, domain string) (*didProvisionResponse, er
 func signWithRegistry(_ string, _ string, _ []byte) (string, error) {
 	// For this demo, the signature is produced by the agent itself
 	// after receiving its DID. The interceptor sets up the DID identity.
-	// Returning empty — the agent signs on subsequent requests.
+	// Returning empty - the agent signs on subsequent requests.
 	return "", nil
 }

@@ -1,6 +1,6 @@
-# Custom Kong Gateway Plugins — AP2 Zero-Trust Enforcement
+# Custom Kong Gateway Plugins - AP2 Zero-Trust Enforcement
 
-These three Go plugins move trust enforcement from the agent layer to the **gateway layer**. Instead of trusting agents to self-manage identity and audit, Kong provisions DIDs, verifies signatures, and writes immutable records — independently and transparently.
+These three Go plugins move trust enforcement from the agent layer to the **gateway layer**. Instead of trusting agents to self-manage identity and audit, Kong provisions DIDs, verifies signatures, and writes immutable records - independently and transparently.
 
 ## Why Custom Plugins?
 
@@ -23,7 +23,7 @@ Request → [kong-did-interceptor] → Agent → [kong-did-verifier] → [kong-w
 | Every agent has a DID | Agent must self-register | Kong provisions automatically |
 | Responses are signed | Agent must sign correctly | Kong verifies independently |
 | Audit trail exists | Agent must write records | Kong writes unconditionally |
-| Agents can bypass controls | Yes | No — gateway layer enforces |
+| Agents can bypass controls | Yes | No - gateway layer enforces |
 
 ---
 
@@ -85,7 +85,7 @@ Request → [kong-did-interceptor] → Agent → [kong-did-verifier] → [kong-w
    - Kong verification status and trust score
 3. POSTs the record to WORM Storage (write-once, immutable)
 
-**Why it's needed:** Creates a tamper-proof audit trail that agents cannot bypass or alter. Every A2A interaction is recorded with its cryptographic identity and verification status — independent of what the agents report.
+**Why it's needed:** Creates a tamper-proof audit trail that agents cannot bypass or alter. Every A2A interaction is recorded with its cryptographic identity and verification status - independent of what the agents report.
 
 **Configuration:**
 
@@ -155,7 +155,7 @@ plugins/
 
 Per [Kong docs](https://developer.konghq.com/custom-plugins/konnect-hybrid-mode/):
 
-1. **Upload `schema.konnect.lua`** to Konnect CP via API — Konnect uses it for config validation
+1. **Upload `schema.konnect.lua`** to Konnect CP via API - Konnect uses it for config validation
 2. **Install Go plugin binaries** on each DP node via volume mount
 
 ```bash

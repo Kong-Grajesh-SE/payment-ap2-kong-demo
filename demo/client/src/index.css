@@ -132,7 +132,7 @@
   }
 }
 
-/* Custom scrollbar — dark theme */
+/* Custom scrollbar - dark theme */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }

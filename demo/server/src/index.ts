@@ -125,7 +125,7 @@ function getOrCreateSession(sessionId?: string): Session {
   return session;
 }
 
-// ─── Wallet (Credentials Provider — simulated locally for demo) ──
+// ─── Wallet (Credentials Provider - simulated locally for demo) ──
 function getPaymentMethods(): PaymentMethod[] {
   return [
     { id: "pm1", type: "card", label: "Visa ending in 4242", last4: "4242", network: "visa" },
@@ -205,10 +205,14 @@ JSON format:
           const cleaned = output.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
           const parsed = JSON.parse(cleaned);
           intent = parsed.intent;
-          naturalResponse = parsed.naturalResponse;
+          naturalResponse = parsed.naturalResponse || `I'll help you find that. Let me search our catalog.`;
         } catch {
           intent = { product: message, maxBudget: 200, currency: "USD", preferences: [] };
           naturalResponse = `I'll help you find "${message}". Let me search our merchant catalog.`;
+        }
+
+        if (!intent) {
+          intent = { product: message, maxBudget: 200, currency: "USD", preferences: [] };
         }
 
         session.intent = intent;

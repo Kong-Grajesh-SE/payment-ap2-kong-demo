@@ -1,4 +1,4 @@
-# Setup Guide — AP2 Payment Demo
+# Setup Guide - AP2 Payment Demo
 
 Step-by-step instructions to deploy the AP2 autonomous payment demo on top of an existing Kong Gateway.
 
@@ -11,7 +11,7 @@ Step-by-step instructions to deploy the AP2 autonomous payment demo on top of an
 | Docker Desktop | 4.x+ | Run Kong DP + agent services |
 | decK CLI | 1.38+ | Declarative config management |
 | Konnect account | Enterprise | Control plane + Debugger |
-| Mistral API key | — | LLM for intent extraction |
+| Mistral API key | - | LLM for intent extraction |
 | Node.js | 20+ | Demo app (BFF + client) |
 
 ```bash
@@ -22,7 +22,7 @@ deck version
 
 ---
 
-## Phase 0: Baseline — Kong Gateway with LLM + OTel
+## Phase 0: Baseline - Kong Gateway with LLM + OTel
 
 > Skip this if you already have Kong running with an LLM route and OpenTelemetry.
 
@@ -142,9 +142,9 @@ Summary:
 > `--select-tag ap2-agents` means decK only manages entities with that tag.
 > Your existing LLM route, OTel plugin, and any other config remains untouched.
 
-### 1.3 Verify — End-to-End AP2 Flow Through Kong
+### 1.3 Verify - End-to-End AP2 Flow Through Kong
 
-#### Step 1: Search Agent — Product Discovery
+#### Step 1: Search Agent - Product Discovery
 
 ```bash
 curl -s -X POST http://localhost:8000/agents/search \
@@ -186,7 +186,7 @@ curl -s -X POST http://localhost:8000/agents/search \
 }
 ```
 
-#### Step 2: Cart Intent Agent — Add to Cart
+#### Step 2: Cart Intent Agent - Add to Cart
 
 ```bash
 curl -s -X POST http://localhost:8000/agents/cart-intent \
@@ -204,7 +204,7 @@ curl -s -X POST http://localhost:8000/agents/cart-intent \
 
 **Expected:** Returns `CartMandate` with items, totalAmount, paymentMethods, and Ed25519 signature.
 
-#### Step 3: Cart Mandate Agent — Authorize Payment
+#### Step 3: Cart Mandate Agent - Authorize Payment
 
 ```bash
 curl -s -X POST http://localhost:8000/agents/cart-mandate \
@@ -223,7 +223,7 @@ curl -s -X POST http://localhost:8000/agents/cart-mandate \
 
 **Expected:** Returns `PaymentMandate` with DPAN token, authCode, status "authorized", and signature.
 
-#### Step 4: Payment Agent — Settle Payment
+#### Step 4: Payment Agent - Settle Payment
 
 ```bash
 curl -s -X POST http://localhost:8000/agents/payment \
@@ -279,12 +279,12 @@ Open **http://localhost:5173** and type a shopping intent (e.g., "I want to buy 
 | Step | User Action | What Happens (via Kong) |
 |------|-------------|------------------------|
 | 1 | Types "buy running shoes" | Mistral extracts intent → `POST /llm` |
-| 2 | — | Search Agent called → `POST /agents/search` |
+| 2 | - | Search Agent called → `POST /agents/search` |
 | 3 | Picks a product | Cart Intent Agent called → `POST /agents/cart-intent` |
 | 4 | Selects payment method | Wallet loaded (simulated locally) |
 | 5 | Confirms purchase | Cart Mandate Agent called → `POST /agents/cart-mandate` |
 | 6 | Enters OTP (`123`) | Payment Agent called → `POST /agents/payment` |
-| 7 | — | DID verified, WORM audit written, receipt generated |
+| 7 | - | DID verified, WORM audit written, receipt generated |
 
 Every hop goes through Kong → ai-a2a-proxy → OTel → visible in Konnect.
 
@@ -328,7 +328,7 @@ docker compose down
 
 ---
 
-## Phase 3: Custom Plugins — Zero-Trust Gateway Enforcement
+## Phase 3: Custom Plugins - Zero-Trust Gateway Enforcement
 
 > This section is specific to the `phase-2-custom-plugins` branch.
 >
@@ -358,9 +358,9 @@ Control Plane: 2e94e75e-66dc-4083-99a2-24ca016c420a
 ✅ kong-worm-logger schema uploaded successfully
 
 === Verifying uploads ===
-  ✓ kong-did-interceptor — verified in CP
-  ✓ kong-did-verifier — verified in CP
-  ✓ kong-worm-logger — verified in CP
+  ✓ kong-did-interceptor - verified in CP
+  ✓ kong-did-verifier - verified in CP
+  ✓ kong-worm-logger - verified in CP
 
 === Done ===
 ```
@@ -413,7 +413,7 @@ You likely already have a Kong DP running. You only need to **add** the followin
 
 #### Applying the change
 
-**Docker** — Container env vars and volumes can't be changed at runtime, so recreate:
+**Docker** - Container env vars and volumes can't be changed at runtime, so recreate:
 ```bash
 # Note your existing container's full config first
 docker inspect kong-dp --format '{{json .Config}}' > /tmp/kong-dp-config.json
@@ -426,12 +426,12 @@ docker run -d --name kong-dp \
   kong/kong-gateway:3.14
 ```
 
-**Docker Compose** — Add to your existing service definition, then:
+**Docker Compose** - Add to your existing service definition, then:
 ```bash
 docker compose up -d    # only recreates the changed service
 ```
 
-**Kubernetes** — Add env vars and volume mounts to your existing DP Deployment spec:
+**Kubernetes** - Add env vars and volume mounts to your existing DP Deployment spec:
 ```yaml
 # In your Kong DP Deployment spec, add to containers[0]:
 env:
@@ -450,7 +450,7 @@ volumes:
 ```
 Then `kubectl rollout restart deployment/kong-dp`.
 
-> **Key point:** You're adding to your existing DP — not replacing it. Your existing
+> **Key point:** You're adding to your existing DP - not replacing it. Your existing
 > Konnect connection, certificates, and configuration stay exactly the same.
 > The only additions are the plugin env vars and binary mounts.
 
@@ -487,7 +487,7 @@ curl -s -X POST http://localhost:8000/agents/search \
 ```
 
 In the response, look for:
-- `_meta.sender_did` — DID provisioned by `kong-did-interceptor`
+- `_meta.sender_did` - DID provisioned by `kong-did-interceptor`
 - Response passes through `kong-did-verifier` without 403
 - WORM storage has a new record: `curl -s http://localhost:8090/records | python3 -m json.tool`
 
@@ -497,11 +497,11 @@ In the response, look for:
 
 This branch demonstrates the full zero-trust approach. Every agent call now goes through:
 
-1. **kong-did-interceptor** (Access phase) — provisions DID, signs request body, injects headers
-2. **kong-did-verifier** (Access phase) — resolves DID, verifies Ed25519 signature against request body
-3. **Agent processes request** — receives verified identity context
-4. **kong-worm-logger** (Log phase) — writes immutable audit record after response
+1. **kong-did-interceptor** (Access phase) - provisions DID, signs request body, injects headers
+2. **kong-did-verifier** (Access phase) - resolves DID, verifies Ed25519 signature against request body
+3. **Agent processes request** - receives verified identity context
+4. **kong-worm-logger** (Log phase) - writes immutable audit record after response
 
-Agents cannot bypass identity or audit — Kong is the single source of truth.
+Agents cannot bypass identity or audit - Kong is the single source of truth.
 
 For the simpler approach where agents self-manage DID/audit (no DP changes needed), see the [`main`](../../tree/main) branch.
