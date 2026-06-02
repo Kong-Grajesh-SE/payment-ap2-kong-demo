@@ -1,129 +1,150 @@
+# ─── AP2 Agent Mesh Addon (Phase 2: Custom Plugins) ─────────────────
+# This file contains ONLY what gets added to an existing Kong Gateway.
+# It is the Phase 2 version of kong.deck.clean.yml, adding custom
+# zero-trust plugins (DID interceptor, DID verifier, WORM logger)
+# on top of the ai-a2a-proxy.
+#
+# Prerequisites (customer already has via baseline.yml):
+#   - Kong Gateway (any 3.x) with Konnect or self-managed
+#   - OpenTelemetry plugin (bundled) - already configured
+#   - LLM route (e.g., Mistral at /llm) - already configured
+#   - Custom plugin schemas uploaded to Konnect CP
+#   - Custom plugin binaries volume-mounted on DP
+#
+# Usage:
+#   deck gateway sync --select-tag ap2-agents \
+#     --konnect-token $TOKEN --konnect-control-plane-name $CP \
+#     config/kong.deck.yml
+#
+# This is ADDITIVE - existing services, routes, and plugins are untouched.
+# ─────────────────────────────────────────────────────────────────────
 _format_version: "3.0"
 
 services:
-  - name: orchestrator-svc
-    url: http://host.docker.internal:8080
-    routes:
-      - name: orchestrator-route
-        paths:
-          - /api/v1
-        strip_path: true
-
   - name: search-svc
     url: http://host.docker.internal:9001
+    tags: [ap2-agents]
     routes:
       - name: search-route
         paths:
           - /agents/search
         strip_path: true
+        tags: [ap2-agents]
 
   - name: cart-intent-svc
     url: http://host.docker.internal:9002
+    tags: [ap2-agents]
     routes:
       - name: cart-intent-route
         paths:
           - /agents/cart-intent
         strip_path: true
+        tags: [ap2-agents]
 
   - name: cart-mandate-svc
     url: http://host.docker.internal:9003
+    tags: [ap2-agents]
     routes:
       - name: cart-mandate-route
         paths:
           - /agents/cart-mandate
         strip_path: true
+        tags: [ap2-agents]
 
   - name: payment-svc
     url: http://host.docker.internal:9004
+    tags: [ap2-agents]
     routes:
       - name: payment-route
         paths:
           - /agents/payment
         strip_path: true
-
-  # ─── LLM Gateway: Mistral via Kong ─────────────────────────────
-  - name: mistral-llm-svc
-    url: https://api.mistral.ai
-    routes:
-      - name: mistral-llm-route
-        paths:
-          - /llm
-        strip_path: true
+        tags: [ap2-agents]
 
 plugins:
-  - name: opentelemetry
-    config:
-      traces_endpoint: http://host.docker.internal:4319/v1/traces
-      resource_attributes:
-        service.name: kong-ap2-gateway
-      sampling_rate: 1.0
-
+  # ─── DID Interceptor (priority 1000): inject sender DID ──────
   - name: kong-did-interceptor
     service: search-svc
+    tags: [ap2-agents]
     config:
       did_registry_url: http://host.docker.internal:8070
       did_method: peer
 
   - name: kong-did-interceptor
     service: cart-intent-svc
+    tags: [ap2-agents]
     config:
       did_registry_url: http://host.docker.internal:8070
       did_method: peer
 
   - name: kong-did-interceptor
     service: cart-mandate-svc
+    tags: [ap2-agents]
     config:
       did_registry_url: http://host.docker.internal:8070
       did_method: peer
 
   - name: kong-did-interceptor
     service: payment-svc
+    tags: [ap2-agents]
     config:
       did_registry_url: http://host.docker.internal:8070
       did_method: peer
 
+  # ─── DID Verifier (priority 900): validate sender DID ────────
   - name: kong-did-verifier
     service: search-svc
+    tags: [ap2-agents]
     config:
       did_registry_url: http://host.docker.internal:8070
 
   - name: kong-did-verifier
     service: cart-intent-svc
+    tags: [ap2-agents]
     config:
       did_registry_url: http://host.docker.internal:8070
 
   - name: kong-did-verifier
     service: cart-mandate-svc
+    tags: [ap2-agents]
     config:
       did_registry_url: http://host.docker.internal:8070
 
   - name: kong-did-verifier
     service: payment-svc
+    tags: [ap2-agents]
     config:
       did_registry_url: http://host.docker.internal:8070
 
+  # ─── WORM Logger (priority 100): immutable audit trail ───────
   - name: kong-worm-logger
     service: search-svc
+    tags: [ap2-agents]
     config:
       worm_storage_url: http://host.docker.internal:8090
 
   - name: kong-worm-logger
     service: cart-intent-svc
+    tags: [ap2-agents]
     config:
       worm_storage_url: http://host.docker.internal:8090
 
   - name: kong-worm-logger
     service: cart-mandate-svc
+    tags: [ap2-agents]
     config:
       worm_storage_url: http://host.docker.internal:8090
 
   - name: kong-worm-logger
     service: payment-svc
+    tags: [ap2-agents]
     config:
       worm_storage_url: http://host.docker.internal:8090
 
+  # ─── A2A Proxy (bundled): JSON-RPC protocol handling ─────────
   - name: ai-a2a-proxy
     service: search-svc
+    tags: [ap2-agents]
     config:
       logging:
         log_statistics: true
@@ -131,6 +152,7 @@ plugins:
 
   - name: ai-a2a-proxy
     service: cart-intent-svc
+    tags: [ap2-agents]
     config:
       logging:
         log_statistics: true
@@ -138,6 +160,7 @@ plugins:
 
   - name: ai-a2a-proxy
     service: cart-mandate-svc
+    tags: [ap2-agents]
     config:
       logging:
         log_statistics: true
@@ -145,6 +168,7 @@ plugins:
 
   - name: ai-a2a-proxy
     service: payment-svc
+    tags: [ap2-agents]
     config:
       logging:
         log_statistics: true

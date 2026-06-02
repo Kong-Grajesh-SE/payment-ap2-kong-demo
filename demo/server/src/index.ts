@@ -186,12 +186,19 @@ app.post("/api/chat", async (req, res) => {
         // Extract intent with Mistral (routed through Kong /llm)
         const llm = getMistralLLM();
         const results = await agent({ llm }).then({
-          prompt: `You are a shopping assistant. Extract the shopping intent from this message and respond with ONLY valid JSON (no markdown):
+          prompt: `You are a shopping assistant. Analyze this customer message and respond with ONLY valid JSON (no markdown):
 
 Customer: "${message}"
 
-JSON format:
+If the message is a greeting or does NOT contain a clear shopping intent (e.g. "hi", "hello", "hey", "how are you"), respond:
 {
+  "isGreeting": true,
+  "naturalResponse": "friendly greeting + ask what they'd like to shop for"
+}
+
+If the message contains a shopping intent, respond:
+{
+  "isGreeting": false,
   "intent": { "product": "product name/type", "maxBudget": 200, "currency": "USD", "preferences": ["key preference"] },
   "naturalResponse": "friendly 1-sentence acknowledgment of what they want to buy"
 }`,
@@ -204,6 +211,18 @@ JSON format:
         try {
           const cleaned = output.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
           const parsed = JSON.parse(cleaned);
+
+          // Handle greetings — respond and stay in idle phase
+          if (parsed.isGreeting) {
+            session.phase = "idle";
+            sendEvent("agent_step", { agent: "Shopping Agent", status: "completed", description: "Greeting detected" });
+            sendEvent("assistant_message", {
+              content: parsed.naturalResponse || "Hello! What would you like to shop for today?",
+            });
+            sendEvent("done", {});
+            return;
+          }
+
           intent = parsed.intent;
           naturalResponse = parsed.naturalResponse || `I'll help you find that. Let me search our catalog.`;
         } catch {

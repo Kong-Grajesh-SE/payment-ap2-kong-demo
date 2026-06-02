@@ -9,6 +9,12 @@ certs/
 *.dylib
 *.test
 *.out
+go.sum
+
+# Go plugin binaries
+plugins/kong-did-interceptor/kong-did-interceptor
+plugins/kong-did-verifier/kong-did-verifier
+plugins/kong-worm-logger/kong-worm-logger
 
 # Node.js
 node_modules/

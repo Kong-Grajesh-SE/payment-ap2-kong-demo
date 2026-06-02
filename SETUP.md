@@ -42,18 +42,22 @@ Konnect provides a `docker run` command. Add these env vars:
 docker run -d --name kong-dp \
   # ... (all Konnect-provided flags) ...
   -e "KONG_CLUSTER_RPC=on" \
+  -e "KONG_CLUSTER_RPC_SYNC=on" \
   -e "KONG_TRACING_INSTRUMENTATIONS=all" \
   -e "KONG_TRACING_SAMPLING_RATE=1.0" \
+  -e "KONG_TLS_CERTIFICATE_VERIFY=off" \
   -p 8000:8000 \
   -p 8443:8443 \
   kong/kong-gateway:3.14
 ```
 
 | Env Var | Purpose |
-|---------|---------|
+|---------|--------|
 | `KONG_CLUSTER_RPC=on` | Enables Konnect Debugger (bidirectional RPC) |
+| `KONG_CLUSTER_RPC_SYNC=on` | Enables RPC-based config sync (required for Debugger sessions) |
 | `KONG_TRACING_INSTRUMENTATIONS=all` | Full OTel tracing across all phases |
 | `KONG_TRACING_SAMPLING_RATE=1.0` | 100% sampling (demo only) |
+| `KONG_TLS_CERTIFICATE_VERIFY=off` | Skip upstream TLS cert verification (dev only) |
 
 ### 0.3 Sync baseline config (LLM route + OTel)
 
@@ -64,6 +68,7 @@ export KONNECT_CONTROL_PLANE_NAME="PE-Bootcamp"
 deck gateway sync \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+  --select-tag ap2-baseline \
   config/baseline.yml
 ```
 
@@ -141,6 +146,10 @@ Summary:
 
 > `--select-tag ap2-agents` means decK only manages entities with that tag.
 > Your existing LLM route, OTel plugin, and any other config remains untouched.
+> Similarly, baseline uses `--select-tag ap2-baseline` so both syncs are independent.
+
+> **Automated alternative:** `./setup.sh` handles Phases 0–2 automatically.
+> For Phase 3 (custom plugins), use `./setup.sh --phase2`.
 
 ### 1.3 Verify - End-to-End AP2 Flow Through Kong
 
@@ -296,10 +305,11 @@ Every hop goes through Kong → ai-a2a-proxy → OTel → visible in Konnect.
 All agent traffic appears in Konnect Analytics under the `ap2-agents` tagged services.
 
 ### Konnect Debugger
-With `KONG_CLUSTER_RPC=on`, inspect any live request:
+With `KONG_CLUSTER_RPC=on` and `KONG_CLUSTER_RPC_SYNC=on`, inspect any live request:
 - Request/response bodies (A2A JSON-RPC payloads)
-- Plugin execution order and timing
+- Plugin execution order and timing (per-span breakdown)
 - Trace propagation across agents
+- Custom plugin logs (kong-did-interceptor, kong-did-verifier, kong-worm-logger)
 
 ### Jaeger (local)
 ```bash
@@ -312,17 +322,26 @@ open http://localhost:16686
 
 ### Remove only AP2 entities (leave LLM + OTel intact):
 ```bash
-deck gateway sync \
+deck gateway reset \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
-  --select-tag ap2-agents \
-  /dev/stdin <<< '_format_version: "3.0"'
+  --select-tag ap2-agents --force
+```
+
+### Remove baseline entities:
+```bash
+deck gateway reset \
+  --konnect-token "$KONNECT_API_TOKEN" \
+  --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+  --select-tag ap2-baseline --force
 ```
 
 ### Stop all services:
 ```bash
 docker compose down
 ```
+
+> **Automated alternative:** `./cleanup.sh` or `./cleanup.sh --all` for full teardown.
 
 ---
 

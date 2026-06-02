@@ -258,8 +258,10 @@ else
   echo "  1. Go to Konnect → Gateway Manager → Data Plane Nodes → New Data Plane Node"
   echo "  2. Use the Docker command Konnect provides, adding:"
   echo "     -e KONG_CLUSTER_RPC=on"
+  echo "     -e KONG_CLUSTER_RPC_SYNC=on"
   echo "     -e KONG_TRACING_INSTRUMENTATIONS=all"
   echo "     -e KONG_TRACING_SAMPLING_RATE=1.0"
+  echo "     -e KONG_TLS_CERTIFICATE_VERIFY=off"
   echo "     -p 8000:8000 -p 8443:8443"
   echo ""
   read -rp "  Press Enter once your Kong DP is running (or Ctrl+C to exit)..."
@@ -284,11 +286,12 @@ if [ -z "$CP_NAME" ] || [ -z "$TOKEN" ]; then
   exit 1
 fi
 
-# Phase 0: Baseline (LLM route + OTel)
+# Phase 0: Baseline (LLM route + OTel) — scoped by tag so it won't touch agent mesh
 info "Syncing baseline config (LLM route + OpenTelemetry)..."
 deck gateway sync \
   --konnect-token "$TOKEN" \
   --konnect-control-plane-name "$CP_NAME" \
+  --select-tag ap2-baseline \
   config/baseline.yml
 
 success "Baseline synced"
@@ -296,17 +299,11 @@ success "Baseline synced"
 # Phase 1: Agent mesh (additive with --select-tag)
 info "Syncing agent mesh config (ai-a2a-proxy + 4 agent routes)..."
 
-DECK_CONFIG="config/kong.deck.clean.yml"
-if $PHASE2 && [ -f "config/kong.deck.yml" ]; then
-  DECK_CONFIG="config/kong.deck.yml"
-  info "Using full config with custom plugins (Phase 2)"
-fi
-
 deck gateway sync \
   --konnect-token "$TOKEN" \
   --konnect-control-plane-name "$CP_NAME" \
   --select-tag ap2-agents \
-  "$DECK_CONFIG"
+  config/kong.deck.clean.yml
 
 success "Agent mesh synced (--select-tag ap2-agents)"
 
@@ -319,7 +316,7 @@ if $PHASE2; then
   # Build Go plugin binaries
   info "Building Go plugin binaries for Linux..."
   for plugin in kong-did-interceptor kong-did-verifier kong-worm-logger; do
-    (cd "plugins/$plugin" && GOOS=linux GOARCH=amd64 go build -o "$plugin" .)
+    (cd "plugins/$plugin" && go mod tidy && GOOS=linux GOARCH=amd64 go build -o "$plugin" .)
     success "Built $plugin"
   done
 
@@ -333,6 +330,15 @@ if $PHASE2; then
     chmod +x scripts/upload-schemas.sh
     KONNECT_API_TOKEN="$TOKEN" KONNECT_CONTROL_PLANE_ID="$CP_ID" ./scripts/upload-schemas.sh
     success "Schemas uploaded"
+
+    # Now re-sync with the full config that includes custom plugins
+    info "Re-syncing agent mesh with custom plugin config..."
+    deck gateway sync \
+      --konnect-token "$TOKEN" \
+      --konnect-control-plane-name "$CP_NAME" \
+      --select-tag ap2-agents \
+      config/kong.deck.yml
+    success "Agent mesh re-synced with custom plugins"
   fi
 
   echo ""

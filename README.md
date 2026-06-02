@@ -16,40 +16,47 @@ A demonstration of **autonomous agent-to-agent payments** governed by Kong Gatew
                 │ SSE (chat flow)
                 ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│ BFF Server (Node.js/Express)                                          │
+│ BFF Server (Node.js/Express + Volcano SDK)                            │
 │ http://localhost:3001                                                  │
-│ • Extracts intent via Mistral LLM (through Kong)                      │
-│ • Orchestrates 4-step AP2 flow (through Kong)                         │
-│ • Verifies DIDs + writes WORM audit                                   │
+│ • Extracts intent via Mistral LLM (through Kong /llm route)          │
+│ • Orchestrates 4-step AP2 flow (through Kong /agents/* routes)       │
+│ • Uses @volcano.dev/agent SDK with llmMistral() → Kong baseURL      │
 └───────────────┬──────────────────────────────────────────────────────┘
-                │ JSON-RPC 2.0 / A2A Protocol
+                │ All requests via Kong (LLM + A2A agents)
                 ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│ Kong Gateway (Konnect DP)                                             │
-│ http://localhost:8000                                                  │
-│ ┌──────────────────┐  ┌──────────────────┐  ┌───────────────────┐   │
-│ │ ai-a2a-proxy     │  │ opentelemetry    │  │ Route: /llm       │   │
-│ │ (per agent route)│  │ (global)         │  │ Route: /agents/*  │   │
-│ └──────────────────┘  └──────────────────┘  └───────────────────┘   │
-└───────────────┬──────────────────────────────────────────────────────┘
-                │
-    ┌───────────┼───────────┬───────────────┐
-    ▼           ▼           ▼               ▼
-┌────────┐ ┌────────┐ ┌────────────┐ ┌─────────┐
-│ Search │ │ Cart   │ │ Cart       │ │ Payment │
-│ Agent  │ │ Intent │ │ Mandate    │ │ Agent   │
-│ :9001  │ │ :9002  │ │ :9003      │ │ :9004   │
-└───┬────┘ └───┬────┘ └─────┬──────┘ └────┬────┘
-    │          │             │              │
-    └──────────┴─────────────┴──────────────┘
-                        │
-          ┌─────────────┼─────────────┐
-          ▼                           ▼
-    ┌───────────┐              ┌───────────┐
-    │ DID       │              │ WORM      │
-    │ Registry  │              │ Storage   │
-    │ :8070     │              │ :8090     │
-    └───────────┘              └───────────┘
+│ Kong Gateway (Konnect DP)  http://localhost:8000                      │
+│                                                                       │
+│ ┌───────────────────────────────────────────────────────────────────┐│
+│ │ Global: opentelemetry                                             ││
+│ └───────────────────────────────────────────────────────────────────┘│
+│                                                                       │
+│ ┌─────────────────────┐  ┌──────────────────────────────────────┐   │
+│ │ Route: /llm         │  │ Routes: /agents/{search,cart-*,pay*} │   │
+│ │ → api.mistral.ai    │  │ Plugins per route:                   │   │
+│ │                     │  │  • kong-did-interceptor (custom)     │   │
+│ │                     │  │  • kong-did-verifier   (custom)     │   │
+│ │                     │  │  • ai-a2a-proxy        (bundled)    │   │
+│ │                     │  │  • kong-worm-logger    (custom)     │   │
+│ └────────┬────────────┘  └────────────────┬─────────────────────┘   │
+└──────────┼────────────────────────────────┼─────────────────────────┘
+           │                    ┌───────────┼───────────┬──────────┐
+           ▼                    ▼           ▼           ▼          ▼
+    ┌─────────────┐      ┌────────┐  ┌────────┐ ┌──────────┐ ┌────────┐
+    │ Mistral AI  │      │ Search │  │ Cart   │ │ Cart     │ │Payment │
+    │ (LLM)      │      │ Agent  │  │ Intent │ │ Mandate  │ │ Agent  │
+    │ mistral.ai  │      │ :9001  │  │ :9002  │ │ :9003    │ │ :9004  │
+    └─────────────┘      └───┬────┘  └───┬────┘ └────┬─────┘ └───┬────┘
+                             │           │            │           │
+                             └───────────┴────────────┴───────────┘
+                                              │
+                               ┌──────────────┼──────────────┐
+                               ▼                             ▼
+                         ┌───────────┐                ┌───────────┐
+                         │ DID       │                │ WORM      │
+                         │ Registry  │                │ Storage   │
+                         │ :8070     │                │ :8090     │
+                         └───────────┘                └───────────┘
 ```
 
 ## What This Demonstrates
@@ -61,10 +68,37 @@ A demonstration of **autonomous agent-to-agent payments** governed by Kong Gatew
 | **kong-did-verifier** (custom) | Kong verifies Ed25519 DID signatures on responses |
 | **kong-worm-logger** (custom) | Kong writes immutable audit records independently |
 | **OpenTelemetry** (bundled) | Every agent call gets distributed tracing |
-| **Konnect Debugger** | Live request inspection with `KONG_CLUSTER_RPC=on` |
+| **Konnect Debugger** | Live request inspection with `KONG_CLUSTER_RPC=on` + `KONG_CLUSTER_RPC_SYNC=on` |
 | **Konnect Analytics** | Full visibility into agent-to-agent traffic patterns |
 | **decK `--select-tag`** | Additive config - doesn't touch existing gateway setup |
 | **Custom plugin schemas** | Uploaded to Konnect CP; plugin files installed on DP via volume mount |
+
+## Volcano SDK
+
+The BFF server uses [`@volcano.dev/agent`](https://www.npmjs.com/package/@volcano.dev/agent) (v1.1.0+) to interact with Mistral LLM through Kong. Two main exports are used:
+
+| Export | Usage |
+|--------|-------|
+| `llmMistral()` | Creates a Mistral LLM client with `baseURL` pointed at Kong's `/llm` route — all LLM calls are proxied through Kong Gateway instead of hitting Mistral directly |
+| `agent()` | Wraps LLM calls with structured prompt → response chaining (`.then({ prompt }).run()`) for intent extraction and receipt generation |
+
+```ts
+import { agent, llmMistral } from "@volcano.dev/agent";
+
+// LLM calls routed through Kong: localhost:8000/llm → api.mistral.ai
+const llm = llmMistral({
+  apiKey: MISTRAL_API_KEY,
+  model: "mistral-small-latest",
+  baseURL: `${KONG_PROXY_URL}/llm`,
+});
+
+// Structured agent call for intent extraction
+const result = await agent({ llm })
+  .then({ prompt: "Analyze: 'I want running shoes' ..." })
+  .run();
+```
+
+This means **every LLM call** (intent extraction, greeting detection, receipt generation) flows through Kong — giving you full observability in Konnect Analytics and Debugger alongside the A2A agent traffic.
 
 ## AP2 Protocol Flow
 
@@ -104,8 +138,10 @@ Add these env vars to the `docker run` command Konnect provides:
 
 ```bash
 -e "KONG_CLUSTER_RPC=on" \
+-e "KONG_CLUSTER_RPC_SYNC=on" \
 -e "KONG_TRACING_INSTRUMENTATIONS=all" \
 -e "KONG_TRACING_SAMPLING_RATE=1.0" \
+-e "KONG_TLS_CERTIFICATE_VERIFY=off" \
 -p 8000:8000 -p 8443:8443
 ```
 
@@ -118,19 +154,22 @@ docker compose up -d
 ### 4. Sync Kong configuration
 
 ```bash
-# Baseline (LLM route + OTel)
+# Baseline (LLM route + OTel) — scoped by tag, won't touch agent mesh
 deck gateway sync \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+  --select-tag ap2-baseline \
   config/baseline.yml
 
-# Agent mesh (additive - won't touch existing config)
+# Agent mesh (additive — won't touch baseline config)
 deck gateway sync \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
   --select-tag ap2-agents \
   config/kong.deck.clean.yml
 ```
+
+> **Or use the automated setup:** `./setup.sh` handles all of the above.
 
 ### 5. Run the demo app
 
@@ -163,9 +202,9 @@ curl -s -X POST http://localhost:8000/agents/search \
 
 ```
 config/
-  baseline.yml           # LLM route + OpenTelemetry (Phase 0)
-  kong.deck.clean.yml    # Agent routes + ai-a2a-proxy (Phase 1, additive)
-  kong.deck.yml          # Full config with custom plugins (Phase 2)
+  baseline.yml           # LLM route + OpenTelemetry (Phase 0, tagged: ap2-baseline)
+  kong.deck.clean.yml    # Agent routes + ai-a2a-proxy (Phase 1, tagged: ap2-agents)
+  kong.deck.yml          # Agent routes + custom plugins (Phase 2, tagged: ap2-agents)
   otel-collector.yml     # OTel Collector → Jaeger config
 
 plugins/
@@ -195,6 +234,8 @@ demo/
   client/                # React UI (Tailwind CSS)
 
 docker-compose.yml       # All services + OTel + Jaeger
+setup.sh                 # Automated setup (--phase2 for custom plugins)
+cleanup.sh               # Automated cleanup (--all for full teardown)
 ```
 
 ## Key Design Decisions
@@ -230,12 +271,24 @@ No custom DP image needed. The Go plugin binaries are compiled locally and mount
 ## Cleanup
 
 ```bash
-# Remove only AP2 entities (leave LLM + OTel)
-deck gateway sync \
+# Automated cleanup
+./cleanup.sh              # Remove agent mesh + stop Docker
+./cleanup.sh --all        # Full teardown (agents + baseline + volumes + node_modules)
+```
+
+Or manually:
+```bash
+# Remove agent mesh entities
+deck gateway reset \
   --konnect-token "$KONNECT_API_TOKEN" \
   --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
-  --select-tag ap2-agents \
-  /dev/stdin <<< '_format_version: "3.0"'
+  --select-tag ap2-agents --force
+
+# Remove baseline entities
+deck gateway reset \
+  --konnect-token "$KONNECT_API_TOKEN" \
+  --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+  --select-tag ap2-baseline --force
 
 # Stop services
 docker compose down
